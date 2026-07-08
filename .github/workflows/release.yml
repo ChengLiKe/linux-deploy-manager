@@ -5,6 +5,9 @@ on:
     tags:
       - 'v*'
 
+permissions:
+  contents: write
+
 jobs:
   # 前端先构建，因为 Go 的 go:embed 依赖它
   build-frontend:
@@ -123,6 +126,10 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: '22.14'
+
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.22'
 
       - name: 下载 Go 二进制
         uses: actions/download-artifact@v7
