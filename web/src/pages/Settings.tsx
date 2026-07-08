@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { authApi, settingsApi } from '@/utils/api'
+import { authApi, settingsApi, systemApi } from '@/utils/api'
+import { RefreshCw } from 'lucide-react'
 
 export default function Settings() {
   const [oldPassword, setOldPassword] = useState('')
@@ -10,22 +11,33 @@ export default function Settings() {
   const [sudoSaved, setSudoSaved] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+  const [appVersion, setAppVersion] = useState('')
+  const [checkingUpdate, setCheckingUpdate] = useState(false)
 
   useEffect(() => {
     Promise.all([
       settingsApi.get('sudo_enabled'),
       settingsApi.get('sudo_password'),
+      systemApi.version().catch(() => ({ data: { data: { version: 'unknown' } } })),
     ])
-      .then(([enabledRes, pwRes]) => {
+      .then(([enabledRes, pwRes, versionRes]) => {
         setSudoEnabled(enabledRes.data.data?.value === 'true')
         const value = pwRes.data.data?.value || ''
         setSudoPassword(value)
         setSudoSaved(!!value)
+        setAppVersion(versionRes.data.data?.version || versionRes.data?.version || '')
       })
       .catch(() => {
         setSudoSaved(false)
       })
   }, [])
+
+  const handleCheckUpdate = async () => {
+    if (!window.electronAPI) return
+    setCheckingUpdate(true)
+    await window.electronAPI.checkForUpdate()
+    setTimeout(() => setCheckingUpdate(false), 10000)
+  }
 
   const handleChangePassword = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -162,7 +174,9 @@ export default function Settings() {
         <div className="space-y-2 text-sm text-slate-600">
           <div className="flex justify-between max-w-md">
             <span>版本</span>
-            <span className="font-mono text-slate-800">v1.0.0</span>
+            <span className="font-mono text-slate-800">
+              {appVersion ? `v${appVersion}` : 'v1.0.0'}
+            </span>
           </div>
           <div className="flex justify-between max-w-md">
             <span>数据目录</span>
@@ -172,6 +186,18 @@ export default function Settings() {
             <span>日志目录</span>
             <span className="font-mono text-slate-800">/var/log/linux-deploy-manager</span>
           </div>
+          {window.electronAPI && (
+            <div className="pt-3">
+              <button
+                onClick={handleCheckUpdate}
+                disabled={checkingUpdate}
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs bg-amber-50 text-amber-700 border border-amber-200 rounded-lg hover:bg-amber-100 transition-colors disabled:opacity-50"
+              >
+                <RefreshCw size={13} className={checkingUpdate ? 'animate-spin' : ''} />
+                {checkingUpdate ? '检查中...' : '检查更新'}
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>

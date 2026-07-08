@@ -49,10 +49,9 @@
     "removePackageScripts": true,
     "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
     "publish": {
-      "provider": "gitlab",
-      "owner": "your-gitlab-namespace",
+      "provider": "github",
+      "owner": "ChengLiKe",
       "repo": "linux-deploy-manager",
-      "privateToken": "${GITLAB_TOKEN}",
       "releaseType": "release"
     },
     "win": {

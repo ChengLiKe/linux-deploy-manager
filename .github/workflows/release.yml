@@ -1,0 +1,156 @@
+name: 构建与发布
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  GO_VERSION: '1.22'
+  NODE_VERSION: '20'
+
+jobs:
+  # ── 构建 Go 后端二进制（跨平台交叉编译） ──────────────
+  build-go:
+    name: 编译 Go 二进制
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: 提取版本号
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: 编译 Go 后端（全平台）
+        run: |
+          V=${{ steps.version.outputs.version }}
+          BT=$(date +%Y%m%d-%H%M%S)
+          GH=${GITHUB_SHA::7}
+          LDFLAGS="-s -w -X main.version=${V} -X main.buildTime=${BT} -X main.gitCommit=${GH}"
+
+          # Linux amd64
+          mkdir -p bin/linux
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "$LDFLAGS" -o bin/linux/linux-deploy-manager ./cmd/server
+
+          # Windows amd64
+          mkdir -p bin/win32
+          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags "$LDFLAGS" -o bin/win32/linux-deploy-manager.exe ./cmd/server
+
+          # macOS amd64
+          mkdir -p bin/darwin
+          CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags "$LDFLAGS" -o bin/darwin/linux-deploy-manager-amd64 ./cmd/server
+
+          # macOS arm64
+          CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags "$LDFLAGS" -o bin/darwin/linux-deploy-manager-arm64 ./cmd/server
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: go-binaries
+          path: bin/
+
+  # ── 构建前端静态资源 ───────────────────────────────────
+  build-frontend:
+    name: 构建前端
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: web/package-lock.json
+
+      - name: 安装依赖并构建
+        run: |
+          cd web
+          npm ci
+          npm run build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: web-dist
+          path: web/dist/
+
+  # ── 打包 Electron 安装包（按平台矩阵） ────────────────
+  package:
+    name: 打包 ${{ matrix.os-label }}
+    needs: [build-go, build-frontend]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            os-label: Windows
+            platform: win
+            go-binary-dir: win32
+            binary-name: linux-deploy-manager.exe
+
+          - os: ubuntu-latest
+            os-label: Linux
+            platform: linux
+            go-binary-dir: linux
+            binary-name: linux-deploy-manager
+
+          - os: macos-latest
+            os-label: macOS
+            platform: mac
+            go-binary-dir: darwin
+            binary-name: linux-deploy-manager
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      # 下载跨平台编译好的 Go 二进制
+      - name: 下载 Go 二进制
+        uses: actions/download-artifact@v4
+        with:
+          name: go-binaries
+          path: bin/
+
+      # 下载前端构建产物
+      - name: 下载前端产物
+        uses: actions/download-artifact@v4
+        with:
+          name: web-dist
+          path: cmd/server/web/dist/
+
+      # macOS 用 lipo 合并为通用二进制
+      - name: 合并 macOS 通用二进制
+        if: matrix.platform == 'mac'
+        run: |
+          ls -la bin/darwin/
+          lipo -create \
+            bin/darwin/linux-deploy-manager-amd64 \
+            bin/darwin/linux-deploy-manager-arm64 \
+            -output bin/darwin/linux-deploy-manager
+          rm bin/darwin/linux-deploy-manager-amd64 bin/darwin/linux-deploy-manager-arm64
+          file bin/darwin/linux-deploy-manager
+
+      # 验证 Go 二进制存在
+      - name: 验证 Go 二进制
+        run: |
+          ls -la bin/${{ matrix.go-binary-dir }}/${{ matrix.binary-name }}
+          file bin/${{ matrix.go-binary-dir }}/${{ matrix.binary-name }}
+
+      - name: 安装 Node 依赖
+        run: npm ci
+
+      # 打包并发布到 GitHub Releases
+      - name: 打包 Electron 安装包并发布
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/electron-build.js --${{ matrix.platform }} --publish

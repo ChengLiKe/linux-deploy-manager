@@ -1,0 +1,106 @@
+name: CI 构建检查
+
+on:
+  push:
+    branches: [main, master, develop]
+  pull_request:
+    branches: [main, master]
+
+env:
+  GO_VERSION: '1.22'
+  NODE_VERSION: '20'
+
+jobs:
+  # ── Go 后端检查和测试 ───────────────────────────────
+  go-check:
+    name: Go 检查
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: 验证代码
+        run: go vet ./...
+
+      - name: 编译（CGO_ENABLED=0 验证纯 Go SQLite 驱动可用）
+        run: CGO_ENABLED=0 go build -ldflags '-s -w' -o /dev/null ./cmd/server
+
+      - name: 运行测试
+        run: go test -v -race -count=1 ./...
+
+  # ── 前端构建 ────────────────────────────────────────
+  frontend-check:
+    name: 前端检查
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: web/package-lock.json
+
+      - name: 安装依赖
+        run: |
+          cd web
+          npm ci
+
+      - name: 构建
+        run: |
+          cd web
+          npm run build
+
+  # ── 跨平台编译验证（测试打包流程，不上传到 GitHub Releases） ──
+  build-test:
+    name: 构建测试
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: 编译全平台 Go 二进制
+        run: |
+          LDFLAGS="-s -w -X main.version=ci-test -X main.buildTime=$(date +%Y%m%d-%H%M%S) -X main.gitCommit=${GITHUB_SHA::7}"
+
+          # Linux
+          mkdir -p bin/linux
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "$LDFLAGS" -o bin/linux/linux-deploy-manager ./cmd/server
+
+          # Windows
+          mkdir -p bin/win32
+          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags "$LDFLAGS" -o bin/win32/linux-deploy-manager.exe ./cmd/server
+
+          # macOS amd64 + arm64
+          mkdir -p bin/darwin
+          CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags "$LDFLAGS" -o bin/darwin/linux-deploy-manager-amd64 ./cmd/server
+          CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags "$LDFLAGS" -o bin/darwin/linux-deploy-manager-arm64 ./cmd/server
+
+      - name: 构建前端
+        run: |
+          cd web
+          npm ci
+          npm run build
+
+      - name: 拷贝前端到 embed 目录
+        run: |
+          rm -rf cmd/server/web/dist
+          mkdir -p cmd/server/web
+          cp -r web/dist cmd/server/web/dist
+
+      - name: 构建 Go 二进制（含 embed 前端）
+        run: |
+          CGO_ENABLED=0 go build -ldflags '-s -w' -o bin/linux-deploy-manager ./cmd/server
+          file bin/linux-deploy-manager
+          ls -lh bin/linux-deploy-manager

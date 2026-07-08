@@ -123,3 +123,7 @@ export const settingsApi = {
   get: (key: string) => api.get('/settings', { params: { key } }),
   set: (key: string, value: string) => api.post('/settings', { key, value }),
 }
+
+export const systemApi = {
+  version: () => api.get('/version'),
+}

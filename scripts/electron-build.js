@@ -19,11 +19,19 @@
  *   node scripts/electron-build.js --win --mac --linux  # 全平台
  */
 
-const { spawn } = require('child_process');
+const { spawn, execSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
 const PROJECT_ROOT = path.resolve(__dirname, '..');
+const PKG = JSON.parse(fs.readFileSync(path.join(PROJECT_ROOT, 'package.json'), 'utf-8'));
+const APP_VERSION = PKG.version || 'dev';
+const BUILD_TIME = new Date().toISOString().replace(/[:.]/g, '').slice(0, 15);
+let GIT_COMMIT = 'unknown';
+try {
+  GIT_COMMIT = execSync('git rev-parse --short HEAD', { cwd: PROJECT_ROOT }).toString().trim();
+} catch (_) { /* 非 git 环境 */ }
+const GO_LDFLAGS = `-s -w -X main.version=${APP_VERSION} -X main.buildTime=${BUILD_TIME} -X main.gitCommit=${GIT_COMMIT}`;
 const WEB_DIR = path.join(PROJECT_ROOT, 'web');
 const EMBED_DIR = path.join(PROJECT_ROOT, 'cmd', 'server', 'web', 'dist');
 const BIN_DIR = path.join(PROJECT_ROOT, 'bin');
@@ -114,17 +122,26 @@ function copyRecursive(src, dest) {
  * 解析命令行参数，返回目标平台列表
  */
 function resolveTargets() {
-  const requested = process.argv
-    .slice(2)
+  const args = process.argv.slice(2);
+
+  // 提取 --publish 标志（如果有）
+  const publishIndex = args.indexOf('--publish');
+  let hasPublishFlag = false;
+  if (publishIndex !== -1) {
+    hasPublishFlag = true;
+    args.splice(publishIndex, 1);
+  }
+
+  const requested = args
     .map((arg) => platformArgMap[arg])
     .filter(Boolean);
 
   if (requested.length === 0) {
     // 默认当前平台
     const current = process.platform === 'win32' ? 'win' : process.platform === 'darwin' ? 'mac' : 'linux';
-    return [current];
+    return { targets: [current], publish: hasPublishFlag };
   }
-  return [...new Set(requested)];
+  return { targets: [...new Set(requested)], publish: hasPublishFlag };
 }
 
 /**
@@ -172,7 +189,7 @@ async function buildGoBinary(os, arch, binaryName) {
   try {
     await run(
       'go',
-      ['build', '-o', outPath, '-ldflags', '-s -w', './cmd/server'],
+      ['build', '-o', outPath, '-ldflags', GO_LDFLAGS, './cmd/server'],
       { env, shell: false }
     );
   } catch (err) {
@@ -206,7 +223,7 @@ function prepareIcons() {
 /**
  * 调用 electron-builder
  */
-async function runElectronBuilder(targets) {
+async function runElectronBuilder(targets, publish) {
   const platformArgs = [];
   if (targets.includes('win')) platformArgs.push('--win');
   if (targets.includes('mac')) platformArgs.push('--mac');
@@ -216,18 +233,23 @@ async function runElectronBuilder(targets) {
     throw new Error('没有可打包的目标平台');
   }
 
+  // CI 环境或显式传入 --publish 标志时，上传到 GitHub Releases
+  const shouldPublish = publish || process.env.CI === 'true';
+  const publishArg = shouldPublish ? 'always' : 'never';
+
   log('调用 electron-builder...');
+  log(`发布模式: ${shouldPublish ? '将上传到 GitHub Releases' : '本地构建（不上传）'}`);
   const env = {
     ...process.env,
     // 国内镜像加速 Electron 与 electron-builder 二进制下载
     ELECTRON_MIRROR: process.env.ELECTRON_MIRROR || 'https://npmmirror.com/mirrors/electron/',
     ELECTRON_BUILDER_BINARIES_MIRROR: process.env.ELECTRON_BUILDER_BINARIES_MIRROR || 'https://npmmirror.com/mirrors/electron-builder-binaries/',
   };
-  await run('npx', ['electron-builder', ...platformArgs, '--publish', 'never'], { env });
+  await run('npx', ['electron-builder', ...platformArgs, '--publish', publishArg], { env });
 }
 
 async function main() {
-  const targets = resolveTargets();
+  const { targets, publish } = resolveTargets();
   log('目标平台：', targets.join(', '));
 
   // 0. 检查 Go 环境
@@ -255,7 +277,7 @@ async function main() {
   }
 
   // 4. 运行 electron-builder
-  await runElectronBuilder(targets);
+  await runElectronBuilder(targets, publish);
 
   log('打包完成，产物在 dist-electron/ 目录');
 }

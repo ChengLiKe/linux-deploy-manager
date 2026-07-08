@@ -2,6 +2,7 @@ import { Link, useLocation, useNavigate, Outlet } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
 import { LogOut, Key, LayoutTemplate, Home, Settings, Server } from 'lucide-react'
 import { useEffect } from 'react'
+import UpdateNotification from '@/components/UpdateNotification'
 
 const navItems = [
   { path: '/', label: '仪表盘', icon: Home },
@@ -64,6 +65,8 @@ export default function Layout() {
           </button>
         </div>
       </header>
+
+      <UpdateNotification />
 
       <main className="flex-1 overflow-auto">
         <div className="p-4 max-w-7xl mx-auto">
