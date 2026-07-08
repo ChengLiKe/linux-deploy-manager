@@ -1,0 +1,73 @@
+# Linux Deploy Manager — GitLab CI 自动发布
+# 打标签 git tag v1.2.0 && git push origin v1.2.0 后自动触发
+# 产出：Windows NSIS + Portable、macOS DMG + ZIP、Linux AppImage + deb
+# 自动上传到 GitLab Releases，客户端自动检测更新
+
+stages:
+  - release
+
+# ── Windows 构建 ──────────────────────────────────
+win release:
+  stage: release
+  tags:
+    - windows
+  variables:
+    CGO_ENABLED: "0"
+    GOPROXY: "https://goproxy.cn,direct"
+    GOSUMDB: "off"
+  before_script:
+    - choco install -y nodejs
+    - cd web && npm ci --registry=https://registry.npmmirror.com && npm run build && cd ..
+    - mkdir -p cmd/server/web/dist
+    - cp -r web/dist/* cmd/server/web/dist/
+    - npm ci --registry=https://registry.npmmirror.com
+  script:
+    - Go 编译 && 前端构建
+    - node scripts/electron-build.js --win
+  artifacts:
+    paths:
+      - dist-electron/*-win-*.exe
+      - dist-electron/*.yml
+    expire_in: 30 days
+
+# ── macOS 构建 ────────────────────────────────────
+mac release:
+  stage: release
+  tags:
+    - macos
+  only:
+    - tags
+  before_script:
+    - cd web && npm ci && npm run build && cd ..
+    - mkdir -p cmd/server/web/dist
+    - cp -r web/dist/* cmd/server/web/dist/
+    - npm ci
+  script:
+    - node scripts/electron-build.js --mac
+  artifacts:
+    paths:
+      - dist-electron/*-mac-*.dmg
+      - dist-electron/*-mac-*.zip
+      - dist-electron/*-mac-*.yml
+    expire_in: 30 days
+
+# ── Linux 构建 ────────────────────────────────────
+linux release:
+  stage: release
+  tags:
+    - linux
+  only:
+    - tags
+  before_script:
+    - cd web && npm ci && npm run build && cd ..
+    - mkdir -p cmd/server/web/dist
+    - cp -r web/dist/* cmd/server/web/dist/
+    - npm ci
+  script:
+    - node scripts/electron-build.js --linux
+  artifacts:
+    paths:
+      - dist-electron/*-linux-*.AppImage
+      - dist-electron/*-linux-*.deb
+      - dist-electron/*-linux-*.yml
+    expire_in: 30 days

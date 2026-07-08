@@ -1,0 +1,186 @@
+{
+  "name": "linux-deploy-manager",
+  "version": "1.1.0",
+  "description": "Linux Deploy Manager - 多服务器部署管理桌面客户端",
+  "main": "electron/main.js",
+  "author": "Linux Deploy Manager Team",
+  "license": "MIT",
+  "homepage": "./",
+  "scripts": {
+    "electron:dev": "electron electron/main.js",
+    "electron:build": "node scripts/electron-build.js",
+    "electron:build:win": "node scripts/electron-build.js --win",
+    "electron:build:mac": "node scripts/electron-build.js --mac",
+    "electron:build:linux": "node scripts/electron-build.js --linux",
+    "electron:pack": "electron-builder",
+    "postinstall": "electron-builder install-app-deps"
+  },
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "electron-builder": "^24.13.0"
+  },
+  "build": {
+    "appId": "com.linuxdeploymanager.app",
+    "productName": "Linux Deploy Manager",
+    "copyright": "Copyright © 2026 Linux Deploy Manager",
+    "directories": {
+      "output": "dist-electron",
+      "buildResources": "electron/assets"
+    },
+    "files": [
+      "electron/main.js",
+      "electron/preload.js",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "bin/${platform}",
+        "to": "bin",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "asar": true,
+    "asarUnpack": [
+      "bin/**/*"
+    ],
+    "compression": "maximum",
+    "removePackageScripts": true,
+    "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
+    "publish": {
+      "provider": "gitlab",
+      "owner": "your-gitlab-namespace",
+      "repo": "linux-deploy-manager",
+      "privateToken": "${GITLAB_TOKEN}",
+      "releaseType": "release"
+    },
+    "win": {
+      "icon": "electron/assets/icon.png",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "publisherName": "Linux Deploy Manager",
+      "verifyUpdateCodeSignature": false,
+      "forceCodeSigning": false,
+      "signingHashAlgorithms": []
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Linux Deploy Manager",
+      "include": "electron/installer.nsh",
+      "license": "LICENSE",
+      "artifactName": "${productName}-Setup-${version}-win-${arch}.${ext}",
+      "uninstallDisplayName": "Linux Deploy Manager ${version}",
+      "runAfterFinish": true,
+      "deleteAppDataOnUninstall": true
+    },
+    "portable": {
+      "artifactName": "${productName}-Portable-${version}-win-${arch}.${ext}"
+    },
+    "mac": {
+      "icon": "electron/assets/icon.png",
+      "category": "public.app-category.developer-tools",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "x64",
+            "arm64"
+          ]
+        }
+      ],
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false
+    },
+    "dmg": {
+      "title": "Linux Deploy Manager ${version}",
+      "icon": "electron/assets/icon.png",
+      "iconSize": 100,
+      "window": {
+        "width": 540,
+        "height": 380
+      },
+      "contents": [
+        {
+          "x": 130,
+          "y": 220
+        },
+        {
+          "x": 410,
+          "y": 220,
+          "type": "link",
+          "path": "/Applications"
+        }
+      ],
+      "artifactName": "${productName}-${version}-mac-${arch}.${ext}"
+    },
+    "linux": {
+      "icon": "electron/assets/icons",
+      "category": "Development",
+      "maintainer": "Linux Deploy Manager Team",
+      "vendor": "Linux Deploy Manager",
+      "synopsis": "Multi-server deployment management desktop client",
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "deb",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "desktop": {
+        "Name": "Linux Deploy Manager",
+        "Comment": "Multi-server deployment management",
+        "Categories": "Development;System;Network;",
+        "StartupNotify": "false",
+        "Terminal": "false"
+      }
+    },
+    "deb": {
+      "depends": [
+        "libnotify4",
+        "libxtst6",
+        "libnss3",
+        "libgtk-3-0",
+        "libxss1",
+        "libatspi2.0-0"
+      ],
+      "afterInstall": "electron/after-install.sh",
+      "afterRemove": "electron/after-remove.sh"
+    },
+    "appImage": {
+      "artifactName": "${productName}-${version}-linux-${arch}.AppImage"
+    }
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9"
+  }
+}

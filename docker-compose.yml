@@ -1,0 +1,28 @@
+services:
+  linux-deploy-manager:
+    build: .
+    container_name: linux-deploy-manager
+    restart: unless-stopped
+    ports:
+      - "18081:18081"
+    environment:
+      - TZ=Asia/Shanghai
+      - LDM_BIND=0.0.0.0
+    volumes:
+      - ldm_data:/var/lib/linux-deploy-manager
+      - ldm_logs:/var/log/linux-deploy-manager
+      - /var/run/docker.sock:/var/run/docker.sock
+
+      # 使用 deploy.sh 部署时会自动填充以下挂载：
+      # - ~/.ssh:/root/.ssh:ro
+      # - <代码目录>:<代码目录>
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
+
+volumes:
+  ldm_data:
+  ldm_logs:

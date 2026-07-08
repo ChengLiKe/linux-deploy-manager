@@ -1,0 +1,10 @@
+data/
+logs/
+bin/
+web/node_modules/
+web/dist/
+cmd/server/web/
+.git/
+**/.DS_Store
+**/*.md
+coverage.out

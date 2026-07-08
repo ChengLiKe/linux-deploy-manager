@@ -1,0 +1,17 @@
+# 构建产物
+bin/
+server
+cmd/server/web/dist/
+web/dist/
+dist-electron/
+web/node_modules/
+node_modules/
+
+# 日志与数据
+data/
+logs/
+coverage.out
+
+# IDE
+.vscode/
+.idea/
