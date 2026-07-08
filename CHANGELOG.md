@@ -31,7 +31,7 @@
 - 远程执行器（SSH/SFTP），支持远程 Git 拉取与命令执行
 - 环境管理工具接口（`/api/envman/detect`, `/api/envman/envs`）
 - 文件系统浏览 API（`/api/fs/list`, `/api/fs/check-dir`）
-- 实例日志实时流（WebSocket `/ws/instance-logs/:template_id`）
+- 实例日志实时流（WebSocket `/ws/instance-logs/:project_id`）
 - Docker 部署支持：`Dockerfile` + `docker-compose.yml` + `deploy.sh` 自动化脚本
 - 国内镜像加速（`goproxy.cn` + `npmmirror`）
 

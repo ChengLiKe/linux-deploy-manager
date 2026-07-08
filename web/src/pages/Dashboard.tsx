@@ -9,7 +9,7 @@ export default function Dashboard() {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title="模板总数" value="0" icon={LayoutTemplate} color="bg-blue-50 text-blue-600" />
+        <StatCard title="项目总数" value="0" icon={LayoutTemplate} color="bg-blue-50 text-blue-600" />
         <StatCard title="SSH 密钥" value="0" icon={Key} color="bg-green-50 text-green-600" />
         <StatCard title="部署次数" value="0" icon={Zap} color="bg-amber-50 text-amber-600" />
 
@@ -19,9 +19,9 @@ export default function Dashboard() {
         <div className="bg-white rounded-xl border border-slate-200 p-6">
           <h3 className="text-lg font-semibold text-slate-800 mb-4">快捷入口</h3>
           <div className="grid grid-cols-2 gap-3">
-            <Link to="/templates/new" className="flex items-center gap-3 p-4 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors">
+            <Link to="/projects/new" className="flex items-center gap-3 p-4 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors">
               <LayoutTemplate size={20} className="text-amber-600" />
-              <span className="text-slate-700">创建模板</span>
+              <span className="text-slate-700">创建项目</span>
             </Link>
             <Link to="/keys" className="flex items-center gap-3 p-4 bg-slate-50 rounded-lg hover:bg-slate-100 transition-colors">
               <Key size={20} className="text-green-600" />

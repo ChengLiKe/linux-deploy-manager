@@ -17,6 +17,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
+	"github.com/linux-deploy-manager/internal/auth"
 	"github.com/linux-deploy-manager/internal/service"
 	"github.com/linux-deploy-manager/internal/sysutil"
 )
@@ -72,16 +73,29 @@ type serverMsg struct {
 }
 
 type InstanceLogHandler struct {
-	svc      *service.Service
-	upgrader websocket.Upgrader
+	svc         *service.Service
+	upgrader    websocket.Upgrader
+	authService *auth.Service
 }
 
-func NewInstanceLogHandler(svc *service.Service) *InstanceLogHandler {
+func NewInstanceLogHandler(svc *service.Service, authService *auth.Service, allowedOrigins []string) *InstanceLogHandler {
 	return &InstanceLogHandler{
 		svc: svc,
 		upgrader: websocket.Upgrader{
-			CheckOrigin: func(r *http.Request) bool { return true },
+			CheckOrigin: func(r *http.Request) bool {
+				origin := r.Header.Get("Origin")
+				if origin == "" {
+					return true
+				}
+				for _, allowed := range allowedOrigins {
+					if allowed == "*" || allowed == origin {
+						return true
+					}
+				}
+				return false
+			},
 		},
+		authService: authService,
 	}
 }
 
@@ -91,7 +105,7 @@ type session struct {
 	cancel        context.CancelFunc
 	cmd           *exec.Cmd
 	cmdMu         sync.Mutex
-	templateID    uint
+	projectID    uint
 	svc           *service.Service
 	wd            string
 	deployMode    string
@@ -195,7 +209,7 @@ func (s *session) streamLogs(ctx context.Context, params tailParams) {
 			}
 			name := lc.ServiceName
 			if name == "" {
-				name = fmt.Sprintf("%d", s.templateID)
+				name = fmt.Sprintf("%d", s.projectID)
 			}
 			jctlArgs := []string{"-u", name, "-f", "--no-pager", "-o", "cat"}
 			if params.Tail > 0 {
@@ -408,15 +422,28 @@ func (s *session) heartbeat() {
 }
 
 func (h *InstanceLogHandler) Handle(c *gin.Context) {
-	id, err := strconv.ParseUint(c.Param("template_id"), 10, 32)
+	id, err := strconv.ParseUint(c.Param("project_id"), 10, 32)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"code": 400060, "message": "无效的模板 ID"})
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400060, "message": "无效的项目 ID"})
 		return
 	}
 
-	template, err := h.svc.Template.Get(uint(id))
+	// JWT 鉴权
+	tokenStr := c.Query("token")
+	if tokenStr == "" {
+		tokenStr = c.GetHeader("Authorization")
+		if len(tokenStr) > 7 && tokenStr[:7] == "Bearer " {
+			tokenStr = tokenStr[7:]
+		}
+	}
+	if !h.validateToken(tokenStr) {
+		c.JSON(http.StatusUnauthorized, gin.H{"code": 401060, "message": "WebSocket 需要有效的 Token"})
+		return
+	}
+
+	project, err := h.svc.Project.Get(uint(id))
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"code": 404060, "message": "模板不存在"})
+		c.JSON(http.StatusNotFound, gin.H{"code": 404060, "message": "项目不存在"})
 		return
 	}
 
@@ -425,16 +452,16 @@ func (h *InstanceLogHandler) Handle(c *gin.Context) {
 		return
 	}
 
-	wd := filepath.Join(template.CodeDir, template.Name)
+	wd := filepath.Join(project.CodeDir, project.Name)
 
 	sess := &session{
 		conn:           conn,
-		templateID:     uint(id),
+		projectID:      uint(id),
 		svc:            h.svc,
 		wd:             wd,
-		deployMode:     template.DeployMode,
-		localCfg:       parseLocalCfg(template.LocalConfig),
-		containerCfg:   parseContainerCfg(template.ContainerConfig),
+		deployMode:     project.DeployMode,
+		localCfg:       parseLocalCfg(project.LocalConfig),
+		containerCfg:   parseContainerCfg(project.ContainerConfig),
 		composeFile:    "docker-compose.yml",
 		composeWorkDir: wd,
 	}
@@ -472,5 +499,14 @@ func (h *InstanceLogHandler) Handle(c *gin.Context) {
 	<-done
 	sess.stopStream()
 	conn.Close()
-	slog.Info("instance log session ended", "template_id", sess.templateID)
+	slog.Info("instance log session ended", "project_id", sess.projectID)
+}
+
+// validateToken 校验 JWT token
+func (h *InstanceLogHandler) validateToken(tokenStr string) bool {
+	if h.authService == nil {
+		return true
+	}
+	_, err := h.authService.ValidateToken(tokenStr)
+	return err == nil
 }

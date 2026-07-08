@@ -14,7 +14,7 @@ type ServerNodeRepository interface {
 	List() ([]model.ServerNode, error)
 	Update(node *model.ServerNode) error
 	Delete(id uint) error
-	CountTemplates(id uint) (int64, error)
+	CountProjects(id uint) (int64, error)
 }
 
 type serverNodeRepo struct {
@@ -57,8 +57,8 @@ func (r *serverNodeRepo) Delete(id uint) error {
 	return r.db.Delete(&model.ServerNode{}, id).Error
 }
 
-func (r *serverNodeRepo) CountTemplates(id uint) (int64, error) {
+func (r *serverNodeRepo) CountProjects(id uint) (int64, error) {
 	var count int64
-	err := r.db.Model(&model.Template{}).Where("server_node_id = ?", id).Count(&count).Error
+	err := r.db.Model(&model.Project{}).Where("server_node_id = ?", id).Count(&count).Error
 	return count, err
 }

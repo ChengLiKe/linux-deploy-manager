@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react'
 import { serverNodeApi, keyApi } from '@/utils/api'
 import type { ServerNode } from '@/types'
-import { Plus, Server, Trash2, RefreshCw, Edit3, Key, X } from 'lucide-react'
+import { Plus, Server, Trash2, RefreshCw, Edit3, Key, X, Activity } from 'lucide-react'
+import DiagnoseModal from '@/components/DiagnoseModal'
 
 interface ServerKey {
   id: number
@@ -19,6 +20,7 @@ export default function ServerNodeList() {
   const [distributeKeyId, setDistributeKeyId] = useState<number>(0)
   const [showDistribute, setShowDistribute] = useState<number | null>(null)
   const [gitKeys, setGitKeys] = useState<ServerKey[]>([])
+  const [diagnoseTarget, setDiagnoseTarget] = useState<ServerNode | null>(null)
 
   const [form, setForm] = useState({
     name: '',
@@ -129,6 +131,15 @@ export default function ServerNodeList() {
     }
   }
 
+  const handleInit = async (id: number) => {
+    try {
+      await serverNodeApi.init(id)
+      // 不阻塞等待，后台执行
+    } catch (err) {
+      console.error('触发初始化失败', err)
+    }
+  }
+
   const handleDelete = async (id: number) => {
     if (!confirm('确定删除该服务器节点？')) return
     try {
@@ -231,6 +242,22 @@ export default function ServerNodeList() {
                   >
                     <RefreshCw size={14} className={testingId === node.id ? 'animate-spin' : ''} />
                     测试
+                  </button>
+                  <button
+                    onClick={() => setDiagnoseTarget(node)}
+                    className="flex items-center gap-1 px-2.5 py-1.5 text-sm rounded-lg border border-slate-200 hover:bg-amber-50 transition-colors text-amber-700 border-amber-200"
+                    title="连通性诊断"
+                  >
+                    <Activity size={14} />
+                    诊断
+                  </button>
+                  <button
+                    onClick={() => handleInit(node.id)}
+                    className="flex items-center gap-1 px-2.5 py-1.5 text-sm rounded-lg border border-slate-200 hover:bg-green-50 transition-colors text-green-700 border-green-200"
+                    title="环境初始化"
+                  >
+                    <Server size={14} />
+                    初始化
                   </button>
                   <button
                     onClick={() => { setShowDistribute(node.id); setDistributeKeyId(0) }}
@@ -429,6 +456,14 @@ export default function ServerNodeList() {
             </div>
           </div>
         </div>
+      )}
+
+      {diagnoseTarget && (
+        <DiagnoseModal
+          nodeId={diagnoseTarget.id}
+          nodeName={diagnoseTarget.name}
+          onClose={() => setDiagnoseTarget(null)}
+        />
       )}
     </div>
   )

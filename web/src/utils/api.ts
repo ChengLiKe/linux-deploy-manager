@@ -1,28 +1,24 @@
 import axios from 'axios'
 import { getBackendPort, isElectron, navigateToLogin } from './electron'
+import type { CreateProjectRequest, UpdateProjectRequest, Project, CreateServerNodeRequest, UpdateServerNodeRequest } from '@/types'
 
 const api = axios.create({
-  baseURL: '/api/v1', // 默认 Web 模式，Electron 模式下会被动态覆盖
+  baseURL: '/api/v1',
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
   },
 })
 
-// Electron 模式下提前异步获取后端端口并更新 axios 默认 baseURL
-let backendReady: Promise<void> | null = null
-function ensureBackendReady(): Promise<void> {
-  if (!isElectron()) return Promise.resolve()
-  if (backendReady) return backendReady
-  backendReady = getBackendPort().then((port) => {
+// Electron 模式下启动时执行一次端口检测
+if (isElectron()) {
+  getBackendPort().then((port) => {
     api.defaults.baseURL = `http://127.0.0.1:${port}/api/v1`
   })
-  return backendReady
 }
 
-// 请求拦截器：添加 Token + Electron 端口就绪等待
+// 请求拦截器：添加 Token
 api.interceptors.request.use(async (config) => {
-  await ensureBackendReady()
   const token = localStorage.getItem('token')
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
@@ -36,8 +32,10 @@ api.interceptors.response.use(
   (error) => {
     if (error.response?.status === 401) {
       localStorage.removeItem('token')
-      // HashRouter 模式下通过 hash 跳转，Web 模式下保持原有行为
       navigateToLogin()
+    } else if (error.code === 'ERR_NETWORK' || error.code === 'ECONNABORTED') {
+      // TODO: 可集成 toast 组件展示网络错误
+      console.warn('[网络错误]', error.message)
     }
     return Promise.reject(error)
   }
@@ -63,8 +61,8 @@ export const keyApi = {
   test: (id: number, gitHost: string) => api.post(`/keys/${id}/test`, { git_host: gitHost }),
 }
 
-export interface TemplateItem {
-  template: any
+export interface ProjectItem {
+  project: Project
   latest_task?: {
     id: number
     status: string
@@ -74,17 +72,17 @@ export interface TemplateItem {
   }
 }
 
-export const templateApi = {
+export const projectApi = {
   list: (params?: { page?: number; page_size?: number; status?: string }) =>
-    api.get('/templates', { params }),
-  create: (data: object) => api.post('/templates', data),
-  get: (id: number) => api.get(`/templates/${id}`),
-  update: (id: number, data: object) => api.put(`/templates/${id}`, data),
-  patch: (id: number, data: object) => api.patch(`/templates/${id}`, data),
-  delete: (id: number) => api.delete(`/templates/${id}`),
-  clone: (id: number, data?: { name?: string }) => api.post(`/templates/${id}/clone`, data),
-  branches: (id: number) => api.get(`/templates/${id}/branches`),
-  deploy: (id: number, branch: string) => api.post(`/templates/${id}/deploy`, { branch }),
+    api.get('/projects', { params }),
+  create: (data: CreateProjectRequest) => api.post('/projects', data),
+  get: (id: number) => api.get(`/projects/${id}`),
+  update: (id: number, data: UpdateProjectRequest) => api.put(`/projects/${id}`, data),
+  patch: (id: number, data: Partial<UpdateProjectRequest>) => api.patch(`/projects/${id}`, data),
+  delete: (id: number) => api.delete(`/projects/${id}`),
+  clone: (id: number, data?: { name?: string }) => api.post(`/projects/${id}/clone`, data),
+  branches: (id: number) => api.get(`/projects/${id}/branches`),
+  deploy: (id: number, branch: string) => api.post(`/projects/${id}/deploy`, { branch }),
 }
 
 export const fsApi = {
@@ -100,7 +98,7 @@ export const envmanApi = {
 }
 
 export const taskApi = {
-  list: (params?: { template_id?: number; status?: string; page?: number; page_size?: number }) =>
+  list: (params?: { project_id?: number; status?: string; page?: number; page_size?: number }) =>
     api.get('/tasks', { params }),
   get: (id: number) => api.get(`/tasks/${id}`),
   log: (id: number) => api.get(`/tasks/${id}/log`),
@@ -110,13 +108,21 @@ export const taskApi = {
 
 export const serverNodeApi = {
   list: () => api.get('/server-nodes'),
-  create: (data: object) => api.post('/server-nodes', data),
+  create: (data: CreateServerNodeRequest) => api.post('/server-nodes', data),
   get: (id: number) => api.get(`/server-nodes/${id}`),
-  update: (id: number, data: object) => api.put(`/server-nodes/${id}`, data),
+  update: (id: number, data: UpdateServerNodeRequest) => api.put(`/server-nodes/${id}`, data),
   delete: (id: number) => api.delete(`/server-nodes/${id}`),
   test: (id: number) => api.post(`/server-nodes/${id}/test`),
+  diagnose: (id: number) => api.post(`/server-nodes/${id}/diagnose`),
+  init: (id: number) => api.post(`/server-nodes/${id}/init`),
+  initLog: (id: number) => api.get(`/server-nodes/${id}/init-log`),
   distributeKey: (id: number, keyId: number) =>
     api.post(`/server-nodes/${id}/distribute-key`, { key_id: keyId }),
+}
+
+export const fixApi = {
+  autoFix: (nodeId: number, fixType: string) =>
+    api.post('/auto-fix', { node_id: nodeId, fix_type: fixType }),
 }
 
 export const settingsApi = {

@@ -28,8 +28,16 @@ jobs:
           mkdir -p ../cmd/server/web
           cp -r dist ../cmd/server/web/
 
+      - name: Go vet
+        run: go vet ./...
+
       - name: Go 编译
         run: CGO_ENABLED=0 go build ./cmd/server
 
-      - name: Go 测试
-        run: go test ./...
+      - name: Go 测试（含竞态检测）
+        run: go test -race -count=1 ./...
+
+      - name: 检查 go.mod 一致性
+        run: |
+          go mod tidy -v
+          git diff --exit-code go.mod go.sum || (echo "❌ go.mod/go.sum 不一致，请运行 go mod tidy" && exit 1)

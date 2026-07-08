@@ -2,11 +2,20 @@
 // 用于屏蔽部署引擎在 Shell 命令与进程管理上的平台差异。
 package sysutil
 
-import "runtime"
+import (
+	"runtime"
+	"strings"
+)
 
 // IsWindows 当前是否运行在 Windows 上
 func IsWindows() bool {
 	return runtime.GOOS == "windows"
+}
+
+// ShellEscape 转义 shell 路径中的单引号（适用于 sh/bash 单引号字符串）
+// 使用 "'\''" 序列在单引号字符串中安全插入单引号字符
+func ShellEscape(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", "'\\''") + "'"
 }
 
 // IsUnixLike 当前是否为类 Unix 系统（Linux / macOS），即使用 bash 作为默认 shell

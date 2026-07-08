@@ -15,7 +15,7 @@ export interface ServiceMeta {
 export type ConnectionStatus = 'connecting' | 'connected' | 'disconnected' | 'reconnecting'
 
 interface UseInstanceLogSocketOptions {
-  templateId: number
+  projectId: number
   onLog?: (line: LogLine) => void
   onStatus?: (status: string) => void
   onMeta?: (meta: ServiceMeta) => void
@@ -23,7 +23,7 @@ interface UseInstanceLogSocketOptions {
 }
 
 export function useInstanceLogSocket(options: UseInstanceLogSocketOptions) {
-  const { templateId, onLog, onStatus, onMeta, autoReconnect = true } = options
+  const { projectId, onLog, onStatus, onMeta, autoReconnect = true } = options
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('disconnected')
   const [wsUrl, setWsUrl] = useState<string | null>(null)
   const wsRef = useRef<WebSocket | null>(null)
@@ -37,13 +37,13 @@ export function useInstanceLogSocket(options: UseInstanceLogSocketOptions) {
   useEffect(() => {
     if (window.electronAPI) {
       window.electronAPI.getBackendPort().then((port) => {
-        setWsUrl(`ws://127.0.0.1:${port}/ws/instance-logs/${templateId}`)
+        setWsUrl(`ws://127.0.0.1:${port}/ws/instance-logs/${projectId}`)
       })
     } else {
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-      setWsUrl(`${protocol}//${window.location.host}/ws/instance-logs/${templateId}`)
+      setWsUrl(`${protocol}//${window.location.host}/ws/instance-logs/${projectId}`)
     }
-  }, [templateId])
+  }, [projectId])
 
   const clearReconnectTimer = useCallback(() => {
     if (reconnectTimer.current !== undefined) {

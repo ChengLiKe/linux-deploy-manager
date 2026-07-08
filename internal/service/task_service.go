@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/linux-deploy-manager/internal/crypto"
 	"github.com/linux-deploy-manager/internal/deployer"
 	"github.com/linux-deploy-manager/internal/git"
 	"github.com/linux-deploy-manager/internal/model"
@@ -34,16 +35,16 @@ func NewTaskService(repo repository.TaskRepository, serverNodeRepo repository.Se
 
 // CreateTaskRequest 创建任务请求
 type CreateTaskRequest struct {
-	TemplateID uint   `json:"template_id" binding:"required"`
-	Branch     string `json:"branch" binding:"required"`
-	LogPath    string `json:"log_path" binding:"required"`
+	ProjectID uint   `json:"project_id" binding:"required"`
+	Branch    string `json:"branch" binding:"required"`
+	LogPath   string `json:"log_path" binding:"required"`
 }
 
 // Create 创建部署任务
 func (s *TaskService) Create(req *CreateTaskRequest) (*model.DeployTask, error) {
 	now := time.Now()
 	task := &model.DeployTask{
-		TemplateID:  req.TemplateID,
+		ProjectID:   req.ProjectID,
 		Branch:      req.Branch,
 		Status:      "pending",
 		StartedAt:   &now,
@@ -62,8 +63,8 @@ func (s *TaskService) Get(id uint) (*model.DeployTask, error) {
 }
 
 // List 列出任务
-func (s *TaskService) List(templateID uint, status string, page, pageSize int) ([]model.DeployTask, int64, error) {
-	return s.repo.List(templateID, status, page, pageSize)
+func (s *TaskService) List(projectID uint, status string, page, pageSize int) ([]model.DeployTask, int64, error) {
+	return s.repo.List(projectID, status, page, pageSize)
 }
 
 // UpdateStatus 更新任务状态
@@ -82,7 +83,7 @@ func (s *TaskService) UpdateStatus(id uint, status string, errorMsg string) erro
 }
 
 // ExecuteDeploy 执行部署
-func (s *TaskService) ExecuteDeploy(taskID uint, template *model.Template, key *model.SSHKey) error {
+func (s *TaskService) ExecuteDeploy(taskID uint, project *model.Project, key *model.SSHKey) error {
 	// 获取任务以取得分支信息
 	task, err := s.repo.Get(taskID)
 	if err != nil {
@@ -90,14 +91,14 @@ func (s *TaskService) ExecuteDeploy(taskID uint, template *model.Template, key *
 	}
 
 	// 创建 Executor
-	executor, err := s.createExecutor(template)
+	executor, err := s.createExecutor(project)
 	if err != nil {
 		return fmt.Errorf("create executor: %w", err)
 	}
 
 	// 创建 Git 服务（本地或远程）
 	var gitService git.Service
-	if template.ServerNodeID != nil && *template.ServerNodeID > 0 {
+	if project.ServerNodeID != nil && *project.ServerNodeID > 0 {
 		gitService = remote.NewGitService(executor)
 	} else {
 		gitService = git.NewService()
@@ -105,23 +106,23 @@ func (s *TaskService) ExecuteDeploy(taskID uint, template *model.Template, key *
 
 	// 解析环境变量
 	envVars := make(map[string]string)
-	// TODO: 解析 template.EnvContent 根据 template.EnvFormat
+	// TODO: 解析 project.EnvContent 根据 project.EnvFormat
 
 	cfg := &deployer.Config{
-		Name:            template.Name,
-		GitURL:          template.GitURL,
+		Name:            project.Name,
+		GitURL:          project.GitURL,
 		SSHKeyPath:      key.PrivatePath,
-		CodeDir:         template.CodeDir,
-		DeployDir:       template.DeployDir,
+		CodeDir:         project.CodeDir,
+		DeployDir:       project.DeployDir,
 		Branch:          task.Branch,
 		EnvVars:         envVars,
-		PreDeployCmd:    template.PreCmd,
-		DeployCmd:       template.DeployCmd,
-		PostDeployCmd:   template.PostCmd,
-		DeployMode:      template.DeployMode,
-		ContainerConfig: template.ContainerConfig,
-		LocalConfig:     template.LocalConfig,
-		TimeoutSec:      template.TimeoutSec,
+		PreDeployCmd:    project.PreCmd,
+		DeployCmd:       project.DeployCmd,
+		PostDeployCmd:   project.PostCmd,
+		DeployMode:      project.DeployMode,
+		ContainerConfig: project.ContainerConfig,
+		LocalConfig:     project.LocalConfig,
+		TimeoutSec:      project.TimeoutSec,
 		LogDir:          s.logDir,
 	}
 
@@ -129,17 +130,17 @@ func (s *TaskService) ExecuteDeploy(taskID uint, template *model.Template, key *
 	return s.deployer.Execute(ctx, fmt.Sprintf("%d", taskID), cfg, executor, gitService)
 }
 
-// createExecutor 根据模板配置创建对应的执行器（本地或远程）
-func (s *TaskService) createExecutor(template *model.Template) (deployer.Executor, error) {
-	if template.ServerNodeID == nil || *template.ServerNodeID == 0 {
+// createExecutor 根据项目配置创建对应的执行器（本地或远程）
+func (s *TaskService) createExecutor(project *model.Project) (deployer.Executor, error) {
+	if project.ServerNodeID == nil || *project.ServerNodeID == 0 {
 		// 本地模式（向后兼容）
-		return deployer.NewLocalExecutor(template.TimeoutSec), nil
+		return deployer.NewLocalExecutor(project.TimeoutSec), nil
 	}
 
 	// 远程模式
-	node, err := s.serverNodeRepo.Get(*template.ServerNodeID)
+	node, err := s.serverNodeRepo.Get(*project.ServerNodeID)
 	if err != nil {
-		return nil, fmt.Errorf("get server node %d: %w", *template.ServerNodeID, err)
+		return nil, fmt.Errorf("get server node %d: %w", *project.ServerNodeID, err)
 	}
 	if node.Status != "online" {
 		return nil, fmt.Errorf("目标服务器 %s 离线，无法部署", node.Name)
@@ -152,46 +153,19 @@ func (s *TaskService) createExecutor(template *model.Template) (deployer.Executo
 		return nil, fmt.Errorf("connect to server %s: %w", node.Host, err)
 	}
 
-	return deployer.NewRemoteExecutor(client, template.TimeoutSec), nil
+	return deployer.NewRemoteExecutor(client, project.TimeoutSec), nil
 }
 
 // createSSHClient 根据服务器节点配置创建 SSH 客户端
 func (s *TaskService) createSSHClient(node *model.ServerNode) (*sshclient.Client, error) {
-	ctx := context.Background()
-	var client *sshclient.Client
-	var err error
-
-	switch node.AuthType {
-	case "key":
-		if node.ServerKeyID == nil {
-			return nil, fmt.Errorf("server node %s: key auth but no server_key_id", node.Name)
+	password := node.Password
+	if password != "" && node.AuthType == "password" {
+		decrypted, err := crypto.Decrypt(password)
+		if err == nil {
+			password = string(decrypted)
 		}
-		key, err := s.keyRepo.Get(*node.ServerKeyID)
-		if err != nil {
-			return nil, fmt.Errorf("get server key: %w", err)
-		}
-		privateKeyData, err := os.ReadFile(key.PrivatePath)
-		if err != nil {
-			return nil, fmt.Errorf("read private key: %w", err)
-		}
-		client, err = sshclient.NewClientWithKey(node.Host, node.Port, node.User, privateKeyData)
-		if err != nil {
-			return nil, err
-		}
-	case "password":
-		// TODO: 密码解密
-		client, err = sshclient.NewClientWithPassword(node.Host, node.Port, node.User, node.Password)
-		if err != nil {
-			return nil, err
-		}
-	default:
-		return nil, fmt.Errorf("unsupported auth type: %s", node.AuthType)
 	}
-
-	if err := client.Connect(ctx); err != nil {
-		return nil, fmt.Errorf("ssh connect: %w", err)
-	}
-	return client, nil
+	return sshclient.NewClientFromNode(node, password, s.keyRepo)
 }
 
 // CancelDeploy 取消部署

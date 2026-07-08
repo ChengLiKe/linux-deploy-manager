@@ -60,7 +60,7 @@ export default function TaskList() {
               tasks.map((task) => (
                 <tr key={task.id} className="border-b border-slate-100 hover:bg-slate-50">
                   <td className="px-4 py-3 text-sm text-slate-800">#{task.id}</td>
-                  <td className="px-4 py-3 text-sm text-slate-800">{task.template_name}</td>
+                  <td className="px-4 py-3 text-sm text-slate-800">{task.project_name || `项目 #${task.project_id}`}</td>
                   <td className="px-4 py-3 text-sm text-slate-600">{task.branch}</td>
                   <td className="px-4 py-3">
                     <span className={`px-2 py-0.5 text-xs rounded-full ${

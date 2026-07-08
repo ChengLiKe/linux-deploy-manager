@@ -13,6 +13,9 @@ type ServerNode struct {
 	ServerKeyID *uint      `json:"server_key_id"`
 	Password    string     `gorm:"size:255" json:"-"` // 加密存储，不返回前端
 	Status      string     `gorm:"size:20;default:'unknown'" json:"status"`
+	InitStatus  string     `gorm:"size:20;default:'pending'" json:"init_status"`
+	// pending / initializing / ready / init_failed
+	InitVersion string     `gorm:"size:20;default:''" json:"init_version"`
 	LastCheckAt *time.Time `json:"last_check_at"`
 	Description string     `gorm:"size:500" json:"description"`
 	CreatedAt   time.Time  `json:"created_at"`
@@ -34,8 +37,8 @@ type SSHKey struct {
 	UpdatedAt   time.Time `json:"updated_at"`
 }
 
-// Template 部署模板
-type Template struct {
+// Project 项目（可部署的应用单元）
+type Project struct {
 	ID              uint      `gorm:"primaryKey" json:"id"`
 	Name            string    `gorm:"size:50;not null;uniqueIndex" json:"name"`
 	Description     string    `gorm:"size:500;default:''" json:"description"`
@@ -58,32 +61,32 @@ type Template struct {
 	CreatedAt       time.Time `json:"created_at"`
 	UpdatedAt       time.Time `json:"updated_at"`
 
-	SSHKey     SSHKey     `gorm:"foreignKey:SSHKeyID" json:"-"`
-	ServerNode *ServerNode `gorm:"foreignKey:ServerNodeID" json:"-"`
-	Tasks      []DeployTask `gorm:"foreignKey:TemplateID" json:"-"`
+	SSHKey     SSHKey      `gorm:"foreignKey:SSHKeyID" json:"-"`
+	ServerNode *ServerNode  `gorm:"foreignKey:ServerNodeID" json:"-"`
+	Tasks      []DeployTask `gorm:"foreignKey:ProjectID" json:"-"`
 }
 
 // DeployTask 部署任务
 type DeployTask struct {
-	ID          uint       `gorm:"primaryKey" json:"id"`
-	TemplateID  uint       `gorm:"not null;index" json:"template_id"`
-	Branch      string     `gorm:"size:255;not null" json:"branch"`
-	CommitSHA   string     `gorm:"size:40;default:''" json:"commit_sha"`
-	Status      string     `gorm:"size:20;not null;default:'pending'" json:"status"`
-	StartedAt   *time.Time `json:"started_at"`
-	EndedAt     *time.Time `json:"ended_at"`
-	LogPath     string     `gorm:"size:4096;not null" json:"log_path"`
-	TriggeredBy string     `gorm:"size:100;default:'root'" json:"triggered_by"`
-	ErrorMsg    string     `gorm:"type:text;default:''" json:"error_msg"`
-	CreatedAt   time.Time  `json:"created_at"`
+	ID        uint       `gorm:"primaryKey" json:"id"`
+	ProjectID uint       `gorm:"not null;index" json:"project_id"`
+	Branch    string     `gorm:"size:255;not null" json:"branch"`
+	CommitSHA string     `gorm:"size:40;default:''" json:"commit_sha"`
+	Status    string     `gorm:"size:20;not null;default:'pending'" json:"status"`
+	StartedAt *time.Time `json:"started_at"`
+	EndedAt   *time.Time `json:"ended_at"`
+	LogPath   string     `gorm:"size:4096;not null" json:"log_path"`
+	TriggeredBy string  `gorm:"size:100;default:'root'" json:"triggered_by"`
+	ErrorMsg  string     `gorm:"type:text;default:''" json:"error_msg"`
+	CreatedAt time.Time  `json:"created_at"`
 
-	Template Template `gorm:"foreignKey:TemplateID" json:"-"`
+	Project Project `gorm:"foreignKey:ProjectID" json:"-"`
 }
 
-// TemplateHistory 模板历史快照
-type TemplateHistory struct {
+// ProjectHistory 项目部署历史快照
+type ProjectHistory struct {
 	ID             uint      `gorm:"primaryKey" json:"id"`
-	TemplateID     uint      `json:"template_id"`
+	ProjectID      uint      `json:"project_id"`
 	TaskID         uint      `json:"task_id"`
 	ConfigSnapshot string    `gorm:"type:text;not null" json:"config_snapshot"`
 	CreatedAt      time.Time `json:"created_at"`
@@ -96,4 +99,17 @@ type Setting struct {
 	Value     string    `gorm:"type:text;not null" json:"value"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
+}
+
+// NodeInitLog 节点初始化日志
+type NodeInitLog struct {
+	ID        uint       `gorm:"primaryKey" json:"id"`
+	NodeID    uint       `gorm:"not null;index" json:"node_id"`
+	Phase     string     `gorm:"size:20;not null" json:"phase"`      // system / tools / runtime / config_sync
+	Status    string     `gorm:"size:20;not null" json:"status"`     // running / success / failed / rolled_back
+	StepName  string     `gorm:"size:100" json:"step_name"`
+	Output    string     `gorm:"type:text" json:"output"`
+	ErrorMsg  string     `gorm:"type:text" json:"error_msg"`
+	StartedAt time.Time  `json:"started_at"`
+	EndedAt   *time.Time `json:"ended_at"`
 }

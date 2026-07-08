@@ -40,7 +40,7 @@ func InitDB(dbPath string) (*gorm.DB, error) {
 	}
 
 	// 自动迁移
-	if err := db.AutoMigrate(&SSHKey{}, &ServerNode{}, &Template{}, &DeployTask{}, &TemplateHistory{}, &Setting{}); err != nil {
+	if err := db.AutoMigrate(&SSHKey{}, &ServerNode{}, &Project{}, &DeployTask{}, &ProjectHistory{}, &Setting{}, &NodeInitLog{}); err != nil {
 		return nil, fmt.Errorf("auto migrate: %w", err)
 	}
 

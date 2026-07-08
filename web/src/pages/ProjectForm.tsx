@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { Play, Download, RotateCcw, ChevronDown, ChevronUp, Save, ArrowLeft, FolderOpen, X, ArrowUp } from 'lucide-react'
-import { templateApi, keyApi, taskApi, fsApi, envmanApi, serverNodeApi } from '../utils/api'
+import { projectApi, keyApi, taskApi, fsApi, envmanApi, serverNodeApi } from '../utils/api'
 import { useWebSocket } from '../hooks/useWebSocket'
 import type { ServerNode } from '../types'
 
@@ -226,7 +226,7 @@ export default function TemplateForm() {
   const { id } = useParams()
   const navigate = useNavigate()
   const isEdit = !!id
-  const templateId = Number(id)
+  const projectId = Number(id)
 
   const [form, setForm] = useState(initialForm)
   const [localConfig, setLocalConfig] = useState<LocalConfig>(initialLocalConfig)
@@ -283,12 +283,12 @@ export default function TemplateForm() {
   useEffect(() => {
     if (!isEdit) return
     setLoading(true)
-    templateApi
-      .get(templateId)
+    projectApi
+      .get(projectId)
       .then((res) => {
         const d = res.data.data
         if (d) {
-          const t = d.template || d
+          const t = d.project || d
           setLatestSuccessTask(d.latest_success_task || null)
           const isContainer = t.deploy_mode === 'container'
           setForm({
@@ -320,7 +320,7 @@ export default function TemplateForm() {
       })
       .catch((err) => setError(err.response?.data?.message || '加载模板失败'))
       .finally(() => setLoading(false))
-  }, [isEdit, templateId])
+  }, [isEdit, projectId])
 
   useEffect(() => {
     keyApi
@@ -354,14 +354,14 @@ export default function TemplateForm() {
     if (!isEdit) return
     setBranchesLoading(true)
     try {
-      const res = await templateApi.branches(templateId)
+      const res = await projectApi.branches(projectId)
       setBranches(res.data.data?.branches || [])
     } catch (err) {
       console.error('加载分支失败:', err)
     } finally {
       setBranchesLoading(false)
     }
-  }, [isEdit, templateId])
+  }, [isEdit, projectId])
 
   useEffect(() => {
     loadBranches()
@@ -422,6 +422,8 @@ export default function TemplateForm() {
   const buildPayload = () => {
     return {
       ...form,
+      env_format: form.env_format as 'dotenv' | 'json',
+      deploy_mode: form.deploy_mode as 'local' | 'container',
       local_config: form.deploy_mode === 'local' ? JSON.stringify(localConfig) : '',
       container_config: form.deploy_mode === 'container' ? JSON.stringify(containerConfig) : '',
     }
@@ -470,10 +472,10 @@ export default function TemplateForm() {
     try {
       const payload = buildPayload()
       if (isEdit) {
-        await templateApi.update(templateId, payload)
+        await projectApi.update(projectId, payload)
       } else {
-        await templateApi.create(payload)
-        navigate('/templates')
+        await projectApi.create(payload)
+        navigate('/projects')
         return true
       }
       setError('')
@@ -548,7 +550,7 @@ export default function TemplateForm() {
     setLogs((prev) => [...prev, '[Deploy] 模板已保存，开始创建部署任务'])
     setTaskId(null)
     try {
-      const res = await templateApi.deploy(templateId, branch)
+      const res = await projectApi.deploy(projectId, branch)
       const newTaskId = res.data.data?.task_id
       if (newTaskId) {
         setTaskId(newTaskId)
@@ -653,7 +655,7 @@ export default function TemplateForm() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <button
-            onClick={() => navigate('/templates')}
+            onClick={() => navigate('/projects')}
             className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg"
           >
             <ArrowLeft size={18} />
@@ -812,7 +814,7 @@ export default function TemplateForm() {
               <label className={labelCls}>格式</label>
               <select
                 value={form.env_format}
-                onChange={(e) => setForm({ ...form, env_format: e.target.value })}
+                onChange={(e) => setForm({ ...form, env_format: e.target.value as 'dotenv' | 'json' })}
                 className={inputCls}
               >
                 <option value="dotenv">.env</option>

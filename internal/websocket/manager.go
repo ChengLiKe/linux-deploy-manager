@@ -9,14 +9,16 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
+	"github.com/linux-deploy-manager/internal/auth"
 )
 
 // Manager WebSocket 管理器
 type Manager struct {
 	upgrader     websocket.Upgrader
-	clients      map[string]map[*Client]bool // task_id -> clients
+	clients      map[string]map[*Client]bool
 	mu           sync.RWMutex
 	getLogBuffer func(taskID string) LogBuffer
+	authService  *auth.Service
 }
 
 // LogBuffer 日志缓冲区接口（避免依赖 deployer 包）
@@ -27,14 +29,24 @@ type LogBuffer interface {
 }
 
 // NewManager 创建 WebSocket 管理器
-func NewManager() *Manager {
+func NewManager(authService *auth.Service, allowedOrigins []string) *Manager {
 	return &Manager{
 		upgrader: websocket.Upgrader{
 			CheckOrigin: func(r *http.Request) bool {
-				return true // 开发模式允许所有来源
+				origin := r.Header.Get("Origin")
+				if origin == "" {
+					return true
+				}
+				for _, allowed := range allowedOrigins {
+					if allowed == "*" || allowed == origin {
+						return true
+					}
+				}
+				return false
 			},
 		},
-		clients: make(map[string]map[*Client]bool),
+		clients:     make(map[string]map[*Client]bool),
+		authService: authService,
 	}
 }
 
@@ -48,14 +60,27 @@ type Client struct {
 	TaskID      string
 	Conn        *websocket.Conn
 	Send        chan []byte
-	unsubscribe func() // 日志取消订阅函数
+	unsubscribe func()
 }
 
-// Handle WebSocket 连接处理
+// Handle WebSocket 连接处理（含 JWT 鉴权）
 func (m *Manager) Handle(c *gin.Context) {
 	taskID := c.Param("task_id")
 	if taskID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"code": 400050, "message": "缺少任务 ID"})
+		return
+	}
+
+	// JWT 鉴权：优先从 query token 参数获取，其次从 Authorization header
+	tokenStr := c.Query("token")
+	if tokenStr == "" {
+		tokenStr = c.GetHeader("Authorization")
+		if len(tokenStr) > 7 && tokenStr[:7] == "Bearer " {
+			tokenStr = tokenStr[7:]
+		}
+	}
+	if tokenStr == "" || !m.validateToken(tokenStr) {
+		c.JSON(http.StatusUnauthorized, gin.H{"code": 401050, "message": "WebSocket 需要有效的 Token"})
 		return
 	}
 
@@ -73,10 +98,8 @@ func (m *Manager) Handle(c *gin.Context) {
 
 	m.register(client)
 
-	// 如果任务已有日志缓冲区，推送历史日志并订阅新日志
 	if m.getLogBuffer != nil {
 		if buf := m.getLogBuffer(taskID); buf != nil {
-			// 发送历史日志
 			for _, line := range buf.GetLines() {
 				data := []byte(fmt.Sprintf(`{"type":"log","data":%q,"timestamp":%q}`, line, time.Now().Format(time.RFC3339)))
 				select {
@@ -84,7 +107,6 @@ func (m *Manager) Handle(c *gin.Context) {
 				default:
 				}
 			}
-			// 订阅新日志
 			logCh := buf.Subscribe()
 			client.unsubscribe = func() {
 				buf.Unsubscribe(logCh)
@@ -97,7 +119,15 @@ func (m *Manager) Handle(c *gin.Context) {
 	go client.readPump(m)
 }
 
-// register 注册客户端
+// validateToken 校验 JWT token，使用 auth.Service
+func (m *Manager) validateToken(tokenStr string) bool {
+	if m.authService == nil {
+		return true // 无认证服务时不校验（开发模式）
+	}
+	_, err := m.authService.ValidateToken(tokenStr)
+	return err == nil
+}
+
 func (m *Manager) register(client *Client) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -108,7 +138,6 @@ func (m *Manager) register(client *Client) {
 	slog.Info("websocket client registered", "task_id", client.TaskID)
 }
 
-// unregister 注销客户端
 func (m *Manager) unregister(client *Client) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
@@ -120,19 +149,16 @@ func (m *Manager) unregister(client *Client) {
 	}
 	close(client.Send)
 	client.Conn.Close()
-	// 取消日志订阅
 	if client.unsubscribe != nil {
 		client.unsubscribe()
 	}
 	slog.Info("websocket client unregistered", "task_id", client.TaskID)
 }
 
-// SendToTask 向指定任务推送日志
 func (m *Manager) SendToTask(taskID string, data []byte) {
 	m.mu.RLock()
 	clients, ok := m.clients[taskID]
 	m.mu.RUnlock()
-
 	if !ok {
 		return
 	}
@@ -140,28 +166,19 @@ func (m *Manager) SendToTask(taskID string, data []byte) {
 		select {
 		case client.Send <- data:
 		default:
-			// 通道满，丢弃消息
 		}
 	}
 }
 
-// SubscribeLogBuffer 订阅日志缓冲区，将日志转发到 WebSocket 客户端
-func (m *Manager) SubscribeLogBuffer(taskID string, logCh <-chan string) {
-	go m.forwardLogs(taskID, logCh)
-}
-
-// forwardLogs 将日志通道数据转发到 WebSocket 客户端
 func (m *Manager) forwardLogs(taskID string, logCh <-chan string) {
 	for line := range logCh {
 		data := []byte(fmt.Sprintf(`{"type":"log","data":%q,"timestamp":%q}`, line, time.Now().Format(time.RFC3339)))
 		m.SendToTask(taskID, data)
 	}
-	// 日志通道关闭，发送状态更新
 	data := []byte(fmt.Sprintf(`{"type":"status","status":"completed"}`))
 	m.SendToTask(taskID, data)
 }
 
-// writePump 向客户端发送消息
 func (c *Client) writePump() {
 	defer c.Conn.Close()
 	for message := range c.Send {
@@ -171,7 +188,6 @@ func (c *Client) writePump() {
 	}
 }
 
-// readPump 读取客户端消息
 func (c *Client) readPump(m *Manager) {
 	defer m.unregister(c)
 	for {

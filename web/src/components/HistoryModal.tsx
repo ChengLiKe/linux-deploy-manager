@@ -5,8 +5,8 @@ import LogModal from './LogModal'
 import InstanceLogModal from './InstanceLogModal'
 
 interface HistoryModalProps {
-  templateId: number
-  templateName: string
+  projectId: number
+  projectName: string
   onClose: () => void
 }
 
@@ -18,7 +18,7 @@ const statusMap: Record<string, { label: string; cls: string }> = {
   cancelled: { label: '已取消', cls: 'bg-slate-100 text-slate-500' },
 }
 
-export default function HistoryModal({ templateId, templateName, onClose }: HistoryModalProps) {
+export default function HistoryModal({ projectId, projectName, onClose }: HistoryModalProps) {
   const [history, setHistory] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [logTarget, setLogTarget] = useState<number | null>(null)
@@ -27,7 +27,7 @@ export default function HistoryModal({ templateId, templateName, onClose }: Hist
   useEffect(() => {
     (async () => {
       try {
-        const res = await taskApi.list({ template_id: templateId, page_size: 20 })
+        const res = await taskApi.list({ project_id: projectId, page_size: 20 })
         setHistory(res.data.data?.items || [])
       } catch (err) {
         console.error('加载部署历史失败:', err)
@@ -35,7 +35,7 @@ export default function HistoryModal({ templateId, templateName, onClose }: Hist
         setLoading(false)
       }
     })()
-  }, [templateId])
+  }, [projectId])
 
   const formatTime = (value?: string) => {
     if (!value) return ''
@@ -52,7 +52,7 @@ export default function HistoryModal({ templateId, templateName, onClose }: Hist
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 shrink-0">
           <div className="flex items-center gap-2">
             <Clock size={16} className="text-slate-400" />
-            <h3 className="font-semibold text-slate-800">{templateName} - 部署历史</h3>
+            <h3 className="font-semibold text-slate-800">{projectName} - 部署历史</h3>
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -106,8 +106,8 @@ export default function HistoryModal({ templateId, templateName, onClose }: Hist
 
       {instanceLogOpen && (
         <InstanceLogModal
-          templateId={templateId}
-          templateName={templateName}
+          projectId={projectId}
+          projectName={projectName}
           onClose={() => setInstanceLogOpen(false)}
         />
       )}

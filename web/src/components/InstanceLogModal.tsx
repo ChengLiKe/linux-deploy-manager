@@ -3,8 +3,8 @@ import { X, Download, Wifi, WifiOff, Search, Pause, Play, RotateCw } from 'lucid
 import { useInstanceLogSocket, type LogLine, type ServiceMeta } from '../hooks/useInstanceLogSocket'
 
 interface InstanceLogModalProps {
-  templateId: number
-  templateName: string
+  projectId: number
+  projectName: string
   onClose: () => void
 }
 
@@ -24,7 +24,7 @@ const LEVEL_ICONS: Record<string, string> = {
 
 const MAX_LINES = 10000
 
-export default function InstanceLogModal({ templateId, templateName, onClose }: InstanceLogModalProps) {
+export default function InstanceLogModal({ projectId, projectName, onClose }: InstanceLogModalProps) {
   const [logs, setLogs] = useState<LogLine[]>([])
   const [services, setServices] = useState<string[]>([])
   const [selectedService, setSelectedService] = useState('')
@@ -37,7 +37,7 @@ export default function InstanceLogModal({ templateId, templateName, onClose }: 
   const pendingLinesRef = useRef<LogLine[]>([])
 
   const { connectionStatus, connect, disconnect, sendCommand } = useInstanceLogSocket({
-    templateId,
+    projectId,
     onLog: (line) => {
       pendingLinesRef.current.push(line)
     },
@@ -110,10 +110,10 @@ export default function InstanceLogModal({ templateId, templateName, onClose }: 
     const url = window.URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = `instance_${templateId}_log.txt`
+    a.download = `instance_${projectId}_log.txt`
     a.click()
     window.URL.revokeObjectURL(url)
-  }, [filteredLogs, templateId])
+  }, [filteredLogs, projectId])
 
   const handleServiceChange = useCallback((service: string) => {
     setSelectedService(service)
@@ -173,7 +173,7 @@ export default function InstanceLogModal({ templateId, templateName, onClose }: 
       >
         <div className="flex items-center justify-between px-5 py-3 border-b border-slate-200 shrink-0">
           <div className="flex items-center gap-2">
-            <h3 className="font-semibold text-slate-800">{templateName} - 实例日志</h3>
+            <h3 className="font-semibold text-slate-800">{projectName} - 实例日志</h3>
             {statusBadge()}
           </div>
           <div className="flex items-center gap-2">

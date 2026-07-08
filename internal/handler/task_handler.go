@@ -20,17 +20,17 @@ func NewTaskHandler(svc *service.Service) *TaskHandler {
 
 // List 列出部署任务
 func (h *TaskHandler) List(c *gin.Context) {
-	var templateID uint
-	if id := c.Query("template_id"); id != "" {
+	var projectID uint
+	if id := c.Query("project_id"); id != "" {
 		if val, err := strconv.ParseUint(id, 10, 32); err == nil {
-			templateID = uint(val)
+			projectID = uint(val)
 		}
 	}
 	status := c.Query("status")
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
 
-	tasks, total, err := h.svc.List(templateID, status, page, pageSize)
+	tasks, total, err := h.svc.List(projectID, status, page, pageSize)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"code": 500030, "message": "获取任务列表失败"})
 		return

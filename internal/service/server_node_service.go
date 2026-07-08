@@ -8,9 +8,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/linux-deploy-manager/internal/crypto"
 	"github.com/linux-deploy-manager/internal/model"
 	"github.com/linux-deploy-manager/internal/remote/sshclient"
 	"github.com/linux-deploy-manager/internal/repository"
+	"github.com/linux-deploy-manager/internal/sysutil"
 )
 
 // ServerNodeService 服务器节点服务
@@ -53,9 +55,15 @@ func (s *ServerNodeService) Create(req *CreateServerNodeRequest) (*model.ServerN
 		User:        req.User,
 		AuthType:    req.AuthType,
 		ServerKeyID: req.ServerKeyID,
-		Password:    req.Password,
 		Description: req.Description,
 		Status:      "unknown",
+	}
+	if req.AuthType == "password" && req.Password != "" {
+		encrypted, err := crypto.Encrypt([]byte(req.Password))
+		if err != nil {
+			return nil, fmt.Errorf("encrypt password: %w", err)
+		}
+		node.Password = encrypted
 	}
 	if err := s.repo.Create(node); err != nil {
 		return nil, fmt.Errorf("create server node: %w", err)
@@ -98,7 +106,11 @@ func (s *ServerNodeService) Update(id uint, req *UpdateServerNodeRequest) (*mode
 	node.AuthType = req.AuthType
 	node.ServerKeyID = req.ServerKeyID
 	if req.Password != "" {
-		node.Password = req.Password
+		encrypted, err := crypto.Encrypt([]byte(req.Password))
+		if err != nil {
+			return nil, fmt.Errorf("encrypt password: %w", err)
+		}
+		node.Password = encrypted
 	}
 	node.Description = req.Description
 	if err := s.repo.Update(node); err != nil {
@@ -109,12 +121,12 @@ func (s *ServerNodeService) Update(id uint, req *UpdateServerNodeRequest) (*mode
 
 // Delete 删除服务器节点
 func (s *ServerNodeService) Delete(id uint) error {
-	count, err := s.repo.CountTemplates(id)
+	count, err := s.repo.CountProjects(id)
 	if err != nil {
-		return fmt.Errorf("count templates: %w", err)
+		return fmt.Errorf("count projects: %w", err)
 	}
 	if count > 0 {
-		return fmt.Errorf("该节点正被 %d 个模板使用，无法删除", count)
+		return fmt.Errorf("该节点正被 %d 个项目使用，无法删除", count)
 	}
 	return s.repo.Delete(id)
 }
@@ -228,7 +240,7 @@ func (s *ServerNodeService) runRemoteCommand(ctx context.Context, client *sshcli
 
 func (s *ServerNodeService) writeRemoteFile(ctx context.Context, client *sshclient.Client, remotePath, content string, perm uint32) error {
 	encoded := base64.StdEncoding.EncodeToString([]byte(content))
-	cmd := fmt.Sprintf("echo '%s' | base64 -d > %s && chmod %o %s", encoded, remotePath, perm, remotePath)
+	cmd := fmt.Sprintf("echo '%s' | base64 -d > %s && chmod %o %s", encoded, sysutil.ShellEscape(remotePath), perm, sysutil.ShellEscape(remotePath))
 	return s.runRemoteCommand(ctx, client, cmd)
 }
 
@@ -240,38 +252,13 @@ func sanitizeKeyName(name string) string {
 
 // createSSHClient 创建 SSH 客户端
 func (s *ServerNodeService) createSSHClient(node *model.ServerNode) (*sshclient.Client, error) {
-	ctx := context.Background()
-	var client *sshclient.Client
-	var err error
-
-	switch node.AuthType {
-	case "key":
-		if node.ServerKeyID == nil {
-			return nil, fmt.Errorf("server node %s: key auth but no server_key_id", node.Name)
+	password := node.Password
+	if password != "" && node.AuthType == "password" {
+		decrypted, err := crypto.Decrypt(password)
+		if err == nil {
+			password = string(decrypted)
 		}
-		key, err := s.keyRepo.Get(*node.ServerKeyID)
-		if err != nil {
-			return nil, fmt.Errorf("get server key: %w", err)
-		}
-		privateKeyData, err := os.ReadFile(key.PrivatePath)
-		if err != nil {
-			return nil, fmt.Errorf("read private key: %w", err)
-		}
-		client, err = sshclient.NewClientWithKey(node.Host, node.Port, node.User, privateKeyData)
-		if err != nil {
-			return nil, err
-		}
-	case "password":
-		client, err = sshclient.NewClientWithPassword(node.Host, node.Port, node.User, node.Password)
-		if err != nil {
-			return nil, err
-		}
-	default:
-		return nil, fmt.Errorf("unsupported auth type: %s", node.AuthType)
 	}
-
-	if err := client.Connect(ctx); err != nil {
-		return nil, fmt.Errorf("ssh connect: %w", err)
-	}
-	return client, nil
+	return sshclient.NewClientFromNode(node, password, s.keyRepo)
 }
+

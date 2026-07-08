@@ -11,6 +11,7 @@ type LogBuffer struct {
 	mu          sync.RWMutex
 	lines       []string
 	subscribers []chan string
+	maxLines    int // 最大行数，默认 10000
 }
 
 // NewLogBuffer 创建新的日志缓冲区
@@ -18,6 +19,7 @@ func NewLogBuffer() *LogBuffer {
 	return &LogBuffer{
 		lines:       make([]string, 0, 1024),
 		subscribers: make([]chan string, 0),
+		maxLines:    10000,
 	}
 }
 
@@ -25,6 +27,10 @@ func NewLogBuffer() *LogBuffer {
 func (lb *LogBuffer) Write(line string) {
 	lb.mu.Lock()
 	lb.lines = append(lb.lines, line)
+	// 超出上限时截断早期日志
+	if len(lb.lines) > lb.maxLines {
+		lb.lines = lb.lines[len(lb.lines)-lb.maxLines:]
+	}
 	subs := make([]chan string, len(lb.subscribers))
 	copy(subs, lb.subscribers)
 	lb.mu.Unlock()

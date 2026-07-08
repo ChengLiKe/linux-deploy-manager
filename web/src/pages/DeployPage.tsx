@@ -1,12 +1,12 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams } from 'react-router-dom'
 import { Play, Download, RotateCcw, ChevronDown, ChevronUp } from 'lucide-react'
-import { templateApi, taskApi } from '../utils/api'
+import { projectApi, taskApi } from '../utils/api'
 import { useWebSocket } from '../hooks/useWebSocket'
 
 export default function DeployPage() {
   const { id } = useParams<{ id: string }>()
-  const templateId = Number(id)
+  const projectId = Number(id)
 
   const [branch, setBranch] = useState('')
   const [branches, setBranches] = useState<string[]>([])
@@ -29,14 +29,14 @@ export default function DeployPage() {
   const loadBranches = useCallback(async () => {
     setBranchesLoading(true)
     try {
-      const res = await templateApi.branches(templateId)
+      const res = await projectApi.branches(projectId)
       setBranches(res.data.data?.branches || [])
     } catch (err) {
       console.error('加载分支失败:', err)
     } finally {
       setBranchesLoading(false)
     }
-  }, [templateId])
+  }, [projectId])
 
   useEffect(() => {
     loadBranches()
@@ -91,7 +91,7 @@ export default function DeployPage() {
     setTaskId(null)
 
     try {
-      const res = await templateApi.deploy(templateId, branch)
+      const res = await projectApi.deploy(projectId, branch)
       const newTaskId = res.data.data?.task_id
       if (newTaskId) {
         setTaskId(newTaskId)
@@ -173,7 +173,7 @@ export default function DeployPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold text-slate-800">部署 - 模板 #{id}</h2>
+        <h2 className="text-2xl font-bold text-slate-800">部署 - 项目 #{id}</h2>
       </div>
 
       <div className="bg-white rounded-xl border border-slate-200 p-6 space-y-4">

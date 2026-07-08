@@ -9,15 +9,18 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/linux-deploy-manager/internal/auth"
 	"github.com/linux-deploy-manager/internal/config"
+	"github.com/linux-deploy-manager/internal/connectivity"
 	"github.com/linux-deploy-manager/internal/deployer"
 	"github.com/linux-deploy-manager/internal/envman"
 	"github.com/linux-deploy-manager/internal/handler"
 	"github.com/linux-deploy-manager/internal/middleware"
 	"github.com/linux-deploy-manager/internal/model"
+	"github.com/linux-deploy-manager/internal/nodeinit"
 	"github.com/linux-deploy-manager/internal/remote/sshclient"
 	"github.com/linux-deploy-manager/internal/repository"
 	"github.com/linux-deploy-manager/internal/service"
@@ -68,12 +71,19 @@ func main() {
 
 	// 初始化部署引擎
 	deployerEngine := deployer.NewDeployer()
+	initEngine := nodeinit.NewInitEngine(db)
+
+	// 获取允许的 CORS 来源（空格分隔，* 表示任意）
+	allowedOrigins := strings.Fields(os.Getenv("LDM_ALLOWED_ORIGINS"))
+	if len(allowedOrigins) == 0 {
+		allowedOrigins = []string{"*"} // 开发默认
+	}
 
 	// 初始化 SSH 连接池
 	sshPool := sshclient.NewPool()
 
 	// 初始化 WebSocket 管理器
-	wsManager := websocket.NewManager()
+	wsManager := websocket.NewManager(authService, allowedOrigins)
 	wsManager.SetLogBufferGetter(func(taskID string) websocket.LogBuffer {
 		buf := deployerEngine.GetTaskLogBuffer(taskID)
 		if buf == nil {
@@ -105,7 +115,7 @@ func main() {
 	r := gin.New()
 	r.Use(middleware.Recovery())
 	r.Use(middleware.Logger())
-	r.Use(middleware.CORS())
+	r.Use(middleware.CORS(allowedOrigins))
 
 	// 注册 API 路由
 	api := r.Group("/api/v1")
@@ -142,16 +152,26 @@ func main() {
 			authorized.POST("/server-nodes/:id/test", serverNodeHandler.Test)
 			authorized.POST("/server-nodes/:id/distribute-key", serverNodeHandler.DistributeKey)
 
-			templateHandler := handler.NewTemplateHandler(svc)
-			authorized.GET("/templates", templateHandler.List)
-			authorized.POST("/templates", templateHandler.Create)
-			authorized.GET("/templates/:id", templateHandler.Get)
-			authorized.PUT("/templates/:id", templateHandler.Update)
-			authorized.PATCH("/templates/:id", templateHandler.Patch)
-			authorized.DELETE("/templates/:id", templateHandler.Delete)
-			authorized.POST("/templates/:id/clone", templateHandler.Clone)
-			authorized.GET("/templates/:id/branches", templateHandler.Branches)
-			authorized.POST("/templates/:id/deploy", templateHandler.Deploy)
+			fixHandler := handler.NewFixHandler(svc)
+			authorized.POST("/auto-fix", fixHandler.AutoFix)
+
+			diagnoseHandler := handler.NewDiagnoseHandler(svc, connectivity.NewConnectivityDiagnoser(repo.ServerNode, repo.Key))
+			authorized.POST("/server-nodes/:id/diagnose", diagnoseHandler.Diagnose)
+
+			initHandler := handler.NewInitHandler(svc, initEngine, db, repo.ServerNode, repo.Key)
+			authorized.POST("/server-nodes/:id/init", initHandler.Init)
+			authorized.GET("/server-nodes/:id/init-log", initHandler.InitLog)
+
+			projectHandler := handler.NewProjectHandler(svc)
+			authorized.GET("/projects", projectHandler.List)
+			authorized.POST("/projects", projectHandler.Create)
+			authorized.GET("/projects/:id", projectHandler.Get)
+			authorized.PUT("/projects/:id", projectHandler.Update)
+			authorized.PATCH("/projects/:id", projectHandler.Patch)
+			authorized.DELETE("/projects/:id", projectHandler.Delete)
+			authorized.POST("/projects/:id/clone", projectHandler.Clone)
+			authorized.GET("/projects/:id/branches", projectHandler.Branches)
+			authorized.POST("/projects/:id/deploy", projectHandler.Deploy)
 
 			fsHandler := handler.NewFSHandler()
 			authorized.GET("/fs/list", fsHandler.ListDir)
@@ -178,7 +198,7 @@ func main() {
 
 	// WebSocket 路由
 	r.GET("/ws/deploy/:task_id", wsManager.Handle)
-	r.GET("/ws/instance-logs/:template_id", handler.NewInstanceLogHandler(svc).Handle)
+	r.GET("/ws/instance-logs/:project_id", handler.NewInstanceLogHandler(svc, authService, allowedOrigins).Handle)
 
 	// 静态文件服务
 	staticFS, err := fs.Sub(webFS, "web/dist")

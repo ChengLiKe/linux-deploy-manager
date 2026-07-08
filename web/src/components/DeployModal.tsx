@@ -1,11 +1,11 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { Play, Download, RotateCcw, ChevronDown, ChevronUp, X, ArrowUp } from 'lucide-react'
-import { templateApi, taskApi } from '../utils/api'
+import { projectApi, taskApi } from '../utils/api'
 import { useWebSocket } from '../hooks/useWebSocket'
 
 interface DeployModalProps {
-  templateId: number
-  templateName: string
+  projectId: number
+  projectName: string
   deployMode: string
   latestTask?: {
     id: number
@@ -26,7 +26,7 @@ const statusMap: Record<string, { label: string; cls: string; dot: string }> = {
   cancelled: { label: '已取消', cls: 'bg-slate-100 text-slate-500', dot: 'bg-slate-500' },
 }
 
-export default function DeployModal({ templateId, templateName, deployMode, latestTask, onClose, onDeployComplete }: DeployModalProps) {
+export default function DeployModal({ projectId, projectName, deployMode, latestTask, onClose, onDeployComplete }: DeployModalProps) {
   const [branch, setBranch] = useState('')
   const [branches, setBranches] = useState<string[]>([])
   const [branchesLoading, setBranchesLoading] = useState(false)
@@ -50,7 +50,7 @@ export default function DeployModal({ templateId, templateName, deployMode, late
   const loadBranches = useCallback(async () => {
     setBranchesLoading(true)
     try {
-      const res = await templateApi.branches(templateId)
+      const res = await projectApi.branches(projectId)
       const list = res.data.data?.branches || []
       setBranches(list)
       if (!branch && hasPreviousSuccess && latestTask?.branch && list.includes(latestTask.branch)) {
@@ -61,7 +61,7 @@ export default function DeployModal({ templateId, templateName, deployMode, late
     } finally {
       setBranchesLoading(false)
     }
-  }, [templateId, branch, hasPreviousSuccess, latestTask])
+  }, [projectId, branch, hasPreviousSuccess, latestTask])
 
   useEffect(() => {
     loadBranches()
@@ -105,7 +105,7 @@ export default function DeployModal({ templateId, templateName, deployMode, late
     setLogs([])
     setTaskId(null)
     try {
-      const res = await templateApi.deploy(templateId, branch)
+      const res = await projectApi.deploy(projectId, branch)
       const newTaskId = res.data.data?.task_id
       if (newTaskId) {
         setTaskId(newTaskId)
@@ -193,7 +193,7 @@ export default function DeployModal({ templateId, templateName, deployMode, late
       >
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 shrink-0">
           <div>
-            <h3 className="font-semibold text-slate-800">{templateName}</h3>
+            <h3 className="font-semibold text-slate-800">{projectName}</h3>
             <p className="text-xs text-slate-400 mt-0.5">
               {deployMode === 'local' ? '本地化部署' : '容器化部署'}
             </p>

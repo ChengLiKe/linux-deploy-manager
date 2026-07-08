@@ -12,9 +12,10 @@ import (
 type Service struct {
 	Key        *KeyService
 	ServerNode *ServerNodeService
-	Template   *TemplateService
+	Project    *ProjectService
 	Task       *TaskService
 	Setting    *SettingService
+	Fix        *FixService
 	Auth       *auth.Service
 	LogDir     string
 }
@@ -25,9 +26,10 @@ func New(repo *repository.Repositories, authService *auth.Service, keysDir strin
 	return &Service{
 		Key:        NewKeyService(repo.Key, keysDir),
 		ServerNode: NewServerNodeService(repo.ServerNode, repo.Key, sshPool),
-		Template:   NewTemplateService(repo.Template, repo.Key, repo.Task, repo.ServerNode, sshPool, git.NewService()),
+		Project:    NewProjectService(repo.Project, repo.Key, repo.Task, repo.ServerNode, sshPool, git.NewService()),
 		Task:       NewTaskService(repo.Task, repo.ServerNode, repo.Key, sshPool, deployerEngine, logDir, settingSvc),
 		Setting:    settingSvc,
+		Fix:        NewFixService(repo.ServerNode, repo.Key),
 		Auth:       authService,
 		LogDir:     logDir,
 	}

@@ -14,9 +14,9 @@ import (
 	"github.com/linux-deploy-manager/internal/repository"
 )
 
-// TemplateService 模板服务
-type TemplateService struct {
-	repo           repository.TemplateRepository
+// ProjectService 项目服务
+type ProjectService struct {
+	repo           repository.ProjectRepository
 	keyRepo        repository.KeyRepository
 	taskRepo       repository.TaskRepository
 	serverNodeRepo repository.ServerNodeRepository
@@ -24,13 +24,13 @@ type TemplateService struct {
 	gitService     git.Service
 }
 
-// NewTemplateService 创建模板服务
-func NewTemplateService(repo repository.TemplateRepository, keyRepo repository.KeyRepository, taskRepo repository.TaskRepository, serverNodeRepo repository.ServerNodeRepository, sshPool *sshclient.Pool, gitService git.Service) *TemplateService {
-	return &TemplateService{repo: repo, keyRepo: keyRepo, taskRepo: taskRepo, serverNodeRepo: serverNodeRepo, sshPool: sshPool, gitService: gitService}
+// NewProjectService 创建项目服务
+func NewProjectService(repo repository.ProjectRepository, keyRepo repository.KeyRepository, taskRepo repository.TaskRepository, serverNodeRepo repository.ServerNodeRepository, sshPool *sshclient.Pool, gitService git.Service) *ProjectService {
+	return &ProjectService{repo: repo, keyRepo: keyRepo, taskRepo: taskRepo, serverNodeRepo: serverNodeRepo, sshPool: sshPool, gitService: gitService}
 }
 
-// CreateTemplateRequest 创建模板请求
-type CreateTemplateRequest struct {
+// CreateProjectRequest 创建项目请求
+type CreateProjectRequest struct {
 	Name            string `json:"name" binding:"required,min=2,max=50"`
 	Description     string `json:"description" binding:"max=500"`
 	GitURL          string `json:"git_url" binding:"required"`
@@ -49,8 +49,8 @@ type CreateTemplateRequest struct {
 	LocalConfig     string `json:"local_config"`
 }
 
-// Create 创建模板
-func (s *TemplateService) Create(req *CreateTemplateRequest) (*model.Template, error) {
+// Create 创建项目
+func (s *ProjectService) Create(req *CreateProjectRequest) (*model.Project, error) {
 	if req.EnvFormat == "" {
 		req.EnvFormat = "dotenv"
 	}
@@ -69,7 +69,7 @@ func (s *TemplateService) Create(req *CreateTemplateRequest) (*model.Template, e
 		serverNodeID = nil
 	}
 
-	t := &model.Template{
+	p := &model.Project{
 		Name:            req.Name,
 		Description:     req.Description,
 		GitURL:          req.GitURL,
@@ -88,142 +88,142 @@ func (s *TemplateService) Create(req *CreateTemplateRequest) (*model.Template, e
 		LocalConfig:     req.LocalConfig,
 		Status:          "draft",
 	}
-	if err := s.repo.Create(t); err != nil {
-		return nil, fmt.Errorf("create template: %w", err)
+	if err := s.repo.Create(p); err != nil {
+		return nil, fmt.Errorf("create project: %w", err)
 	}
-	return t, nil
+	return p, nil
 }
 
-// Get 获取模板
-func (s *TemplateService) Get(id uint) (*model.Template, error) {
+// Get 获取项目
+func (s *ProjectService) Get(id uint) (*model.Project, error) {
 	return s.repo.Get(id)
 }
 
-// GetWithLatestTask 获取模板及最新成功任务
-func (s *TemplateService) GetWithLatestTask(id uint) (*model.Template, *model.DeployTask, error) {
-	t, err := s.repo.Get(id)
+// GetWithLatestTask 获取项目及最新成功任务
+func (s *ProjectService) GetWithLatestTask(id uint) (*model.Project, *model.DeployTask, error) {
+	p, err := s.repo.Get(id)
 	if err != nil {
 		return nil, nil, err
 	}
-	latest, err := s.taskRepo.GetLatestByTemplate(id, "success")
+	latest, err := s.taskRepo.GetLatestByProject(id, "success")
 	if err != nil {
 		return nil, nil, err
 	}
-	return t, latest, nil
+	return p, latest, nil
 }
 
-// List 列出模板
-func (s *TemplateService) List(page, pageSize int, status string) ([]model.Template, int64, error) {
+// List 列出项目
+func (s *ProjectService) List(page, pageSize int, status string) ([]model.Project, int64, error) {
 	return s.repo.List(page, pageSize, status)
 }
 
-// TemplateWithLatestTask 模板及最新任务（用于列表展示）
-type TemplateWithLatestTask struct {
-	Template *model.Template `json:"template"`
+// ProjectWithLatestTask 项目及最新任务（用于列表展示）
+type ProjectWithLatestTask struct {
+	Project    *model.Project   `json:"project"`
 	LatestTask *model.DeployTask `json:"latest_task"`
 }
 
-// ListWithLatestTask 列出模板并附带最新一条任务
-func (s *TemplateService) ListWithLatestTask(page, pageSize int, status string) ([]*TemplateWithLatestTask, int64, error) {
-	templates, total, err := s.repo.List(page, pageSize, status)
+// ListWithLatestTask 列出项目并附带最新一条任务
+func (s *ProjectService) ListWithLatestTask(page, pageSize int, status string) ([]*ProjectWithLatestTask, int64, error) {
+	projects, total, err := s.repo.List(page, pageSize, status)
 	if err != nil {
 		return nil, 0, err
 	}
-	result := make([]*TemplateWithLatestTask, 0, len(templates))
-	for _, t := range templates {
-		latest, err := s.taskRepo.GetLatestByTemplate(t.ID, "")
+	result := make([]*ProjectWithLatestTask, 0, len(projects))
+	for _, p := range projects {
+		latest, err := s.taskRepo.GetLatestByProject(p.ID, "")
 		if err != nil {
 			return nil, 0, err
 		}
-		result = append(result, &TemplateWithLatestTask{
-			Template:   &t,
+		result = append(result, &ProjectWithLatestTask{
+			Project:    &p,
 			LatestTask: latest,
 		})
 	}
 	return result, total, nil
 }
 
-// Update 更新模板
-func (s *TemplateService) Update(id uint, req *CreateTemplateRequest) (*model.Template, error) {
-	t, err := s.repo.Get(id)
+// Update 更新项目
+func (s *ProjectService) Update(id uint, req *CreateProjectRequest) (*model.Project, error) {
+	p, err := s.repo.Get(id)
 	if err != nil {
 		return nil, err
 	}
 
 	// 更新字段
 	if req.Name != "" {
-		t.Name = req.Name
+		p.Name = req.Name
 	}
 	if req.Description != "" || req.Description == "" {
-		t.Description = req.Description
+		p.Description = req.Description
 	}
 	if req.GitURL != "" {
-		t.GitURL = req.GitURL
+		p.GitURL = req.GitURL
 	}
 	if req.SSHKeyID > 0 {
-		t.SSHKeyID = req.SSHKeyID
+		p.SSHKeyID = req.SSHKeyID
 	}
 	// ServerNodeID: 如果请求体显式传了 null，则清空；如果传了正数，则更新
 	if req.ServerNodeID != nil {
 		if *req.ServerNodeID == 0 {
-			t.ServerNodeID = nil
+			p.ServerNodeID = nil
 		} else {
-			t.ServerNodeID = req.ServerNodeID
+			p.ServerNodeID = req.ServerNodeID
 		}
 	}
 	if req.CodeDir != "" {
-		t.CodeDir = req.CodeDir
+		p.CodeDir = req.CodeDir
 	}
 	if req.DeployDir != "" || req.DeployDir == "" {
-		t.DeployDir = req.DeployDir
+		p.DeployDir = req.DeployDir
 	}
 	if req.EnvFormat != "" {
-		t.EnvFormat = req.EnvFormat
+		p.EnvFormat = req.EnvFormat
 	}
 	if req.EnvContent != "" || req.EnvContent == "" {
-		t.EnvContent = req.EnvContent
+		p.EnvContent = req.EnvContent
 	}
 	if req.DeployMode != "" {
-		t.DeployMode = req.DeployMode
+		p.DeployMode = req.DeployMode
 	}
 	if req.PreCmd != "" || req.PreCmd == "" {
-		t.PreCmd = req.PreCmd
+		p.PreCmd = req.PreCmd
 	}
 	if req.DeployCmd != "" || req.DeployCmd == "" {
-		t.DeployCmd = req.DeployCmd
+		p.DeployCmd = req.DeployCmd
 	}
 	if req.PostCmd != "" || req.PostCmd == "" {
-		t.PostCmd = req.PostCmd
+		p.PostCmd = req.PostCmd
 	}
 	if req.TimeoutSec > 0 {
-		t.TimeoutSec = req.TimeoutSec
+		p.TimeoutSec = req.TimeoutSec
 	}
 	if req.ContainerConfig != "" || req.ContainerConfig == "" {
-		t.ContainerConfig = req.ContainerConfig
+		p.ContainerConfig = req.ContainerConfig
 	}
 	if req.LocalConfig != "" || req.LocalConfig == "" {
-		t.LocalConfig = req.LocalConfig
+		p.LocalConfig = req.LocalConfig
 	}
 
-	if err := s.repo.Update(t); err != nil {
-		return nil, fmt.Errorf("update template: %w", err)
+	if err := s.repo.Update(p); err != nil {
+		return nil, fmt.Errorf("update project: %w", err)
 	}
-	return t, nil
+	return p, nil
 }
 
-// Delete 删除模板
-func (s *TemplateService) Delete(id uint) error {
+// Delete 删除项目
+func (s *ProjectService) Delete(id uint) error {
 	return s.repo.Delete(id)
 }
 
-// Clone 复制模板
-func (s *TemplateService) Clone(id uint, name string) (*model.Template, error) {
+// Clone 复制项目
+func (s *ProjectService) Clone(id uint, name string) (*model.Project, error) {
 	orig, err := s.repo.Get(id)
 	if err != nil {
 		return nil, err
 	}
 
-	clone := &model.Template{
+	clone := &model.Project{
 		Name:            name,
 		Description:     orig.Description,
 		GitURL:          orig.GitURL,
@@ -249,13 +249,13 @@ func (s *TemplateService) Clone(id uint, name string) (*model.Template, error) {
 }
 
 // Branches 获取远程分支
-func (s *TemplateService) Branches(id uint) ([]string, error) {
-	t, err := s.repo.Get(id)
+func (s *ProjectService) Branches(id uint) ([]string, error) {
+	p, err := s.repo.Get(id)
 	if err != nil {
-		return nil, fmt.Errorf("get template: %w", err)
+		return nil, fmt.Errorf("get project: %w", err)
 	}
 
-	key, err := s.keyRepo.Get(t.SSHKeyID)
+	key, err := s.keyRepo.Get(p.SSHKeyID)
 	if err != nil {
 		return nil, fmt.Errorf("get ssh key: %w", err)
 	}
@@ -265,9 +265,9 @@ func (s *TemplateService) Branches(id uint) ([]string, error) {
 
 	var branchList []git.Branch
 
-	if t.ServerNodeID != nil && *t.ServerNodeID > 0 {
-		// 远程模板：通过 SSH 在目标服务器上执行 git ls-remote
-		node, err := s.serverNodeRepo.Get(*t.ServerNodeID)
+	if p.ServerNodeID != nil && *p.ServerNodeID > 0 {
+		// 远程项目：通过 SSH 在目标服务器上执行 git ls-remote
+		node, err := s.serverNodeRepo.Get(*p.ServerNodeID)
 		if err != nil {
 			return nil, fmt.Errorf("get server node: %w", err)
 		}
@@ -282,15 +282,15 @@ func (s *TemplateService) Branches(id uint) ([]string, error) {
 			return nil, fmt.Errorf("connect to server: %w", err)
 		}
 
-		executor := deployer.NewRemoteExecutor(client, t.TimeoutSec)
+		executor := deployer.NewRemoteExecutor(client, p.TimeoutSec)
 		gitService := remote.NewGitService(executor)
-		branchList, err = gitService.ListBranches(ctx, t.GitURL, key.PrivatePath)
+		branchList, err = gitService.ListBranches(ctx, p.GitURL, key.PrivatePath)
 		if err != nil {
 			return nil, fmt.Errorf("list branches: %w", err)
 		}
 	} else {
-		// 本地模板
-		branchList, err = s.gitService.ListBranches(ctx, t.GitURL, key.PrivatePath)
+		// 本地项目
+		branchList, err = s.gitService.ListBranches(ctx, p.GitURL, key.PrivatePath)
 		if err != nil {
 			return nil, fmt.Errorf("list branches: %w", err)
 		}
@@ -304,7 +304,7 @@ func (s *TemplateService) Branches(id uint) ([]string, error) {
 }
 
 // createSSHClient 根据服务器节点配置创建 SSH 客户端
-func (s *TemplateService) createSSHClient(node *model.ServerNode) (*sshclient.Client, error) {
+func (s *ProjectService) createSSHClient(node *model.ServerNode) (*sshclient.Client, error) {
 	ctx := context.Background()
 	var client *sshclient.Client
 	var err error

@@ -17,14 +17,23 @@ func Logger() gin.HandlerFunc {
 	return gin.Logger()
 }
 
-// CORS 跨域中间件
-func CORS() gin.HandlerFunc {
+// CORS 跨域中间件（支持白名单）
+func CORS(allowedOrigins []string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		origin := c.Request.Header.Get("Origin")
-		if origin == "" {
-			origin = "*"
+		allowed := "*"
+		if origin != "" {
+			for _, o := range allowedOrigins {
+				if o == "*" || o == origin {
+					allowed = origin
+					break
+				}
+			}
+			if allowed == "*" && len(allowedOrigins) > 0 && allowedOrigins[0] != "*" {
+				allowed = allowedOrigins[0] // 不匹配时用第一个白名单
+			}
 		}
-		c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
+		c.Writer.Header().Set("Access-Control-Allow-Origin", allowed)
 		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
 		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With")
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")

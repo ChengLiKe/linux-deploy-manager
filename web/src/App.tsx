@@ -4,8 +4,8 @@ import Dashboard from './pages/Dashboard'
 import Login from './pages/Login'
 import Setup from './pages/Setup'
 import KeyList from './pages/KeyList'
-import TemplateList from './pages/TemplateList'
-import TemplateForm from './pages/TemplateForm'
+import ProjectList from './pages/ProjectList'
+import ProjectForm from './pages/ProjectForm'
 import ServerNodeList from './pages/ServerNodeList'
 import Settings from './pages/Settings'
 
@@ -18,10 +18,10 @@ function App() {
         <Route path="/" element={<Dashboard />} />
         <Route path="/keys" element={<KeyList />} />
         <Route path="/server-nodes" element={<ServerNodeList />} />
-        <Route path="/templates" element={<TemplateList />} />
-        <Route path="/templates/new" element={<TemplateForm />} />
-        <Route path="/templates/:id/edit" element={<TemplateForm />} />
-        <Route path="/templates/:id/deploy" element={<TemplateForm />} />
+        <Route path="/projects" element={<ProjectList />} />
+        <Route path="/projects/new" element={<ProjectForm />} />
+        <Route path="/projects/:id/edit" element={<ProjectForm />} />
+        <Route path="/projects/:id/deploy" element={<ProjectForm />} />
         <Route path="/settings" element={<Settings />} />
       </Route>
     </Routes>

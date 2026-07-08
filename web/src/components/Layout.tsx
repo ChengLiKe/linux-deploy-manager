@@ -6,7 +6,7 @@ import UpdateNotification from '@/components/UpdateNotification'
 
 const navItems = [
   { path: '/', label: '仪表盘', icon: Home },
-  { path: '/templates', label: '模板', icon: LayoutTemplate },
+  { path: '/projects', label: '项目', icon: LayoutTemplate },
   { path: '/server-nodes', label: '服务器', icon: Server },
   { path: '/keys', label: '密钥', icon: Key },
   { path: '/settings', label: '设置', icon: Settings },

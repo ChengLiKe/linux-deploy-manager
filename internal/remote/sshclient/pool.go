@@ -1,16 +1,20 @@
 package sshclient
 
 import (
+	"fmt"
 	"sync"
 	"time"
+
+	"golang.org/x/sync/singleflight"
 )
 
 // Pool SSH 连接池，按 serverNodeID 管理连接
 type Pool struct {
-	clients   map[uint]*poolEntry
-	mu        sync.RWMutex
-	ttl       time.Duration // 连接存活时间，默认 5 分钟
-	maxIdle   int           // 最大空闲连接数，默认按节点数无限制
+	clients    map[uint]*poolEntry
+	mu         sync.RWMutex
+	ttl        time.Duration
+	maxIdle    int
+	sg         singleflight.Group // 防惊群
 }
 
 type poolEntry struct {
@@ -42,9 +46,9 @@ func NewPool(opts ...PoolOption) *Pool {
 	return p
 }
 
-// GetOrCreate 获取或创建连接
+// GetOrCreate 获取或创建连接（使用 singleflight 防惊群）
 func (p *Pool) GetOrCreate(nodeID uint, factory func() (*Client, error)) (*Client, error) {
-	// 尝试复用现有连接
+	// 尝试复用现有连接（读锁快速路径）
 	p.mu.RLock()
 	entry, ok := p.clients[nodeID]
 	p.mu.RUnlock()
@@ -55,23 +59,37 @@ func (p *Pool) GetOrCreate(nodeID uint, factory func() (*Client, error)) (*Clien
 		return entry.client, nil
 	}
 
-	// 创建新连接
-	newClient, err := factory()
+	// 使用 singleflight 确保同一个 nodeID 只有一个 goroutine 执行 factory()
+	key := fmt.Sprintf("node-%d", nodeID)
+	result, err, _ := p.sg.Do(key, func() (interface{}, error) {
+		// 再检查一次（double-check）：在等待 singleflight 锁期间可能已有其他 goroutine 创建了连接
+		p.mu.RLock()
+		entry, ok := p.clients[nodeID]
+		p.mu.RUnlock()
+		if ok && entry.client != nil && entry.client.IsConnected() {
+			return entry.client, nil
+		}
+
+		newClient, err := factory()
+		if err != nil {
+			return nil, err
+		}
+
+		p.mu.Lock()
+		if oldEntry, ok := p.clients[nodeID]; ok && oldEntry.client != nil {
+			go oldEntry.client.Close()
+		}
+		p.clients[nodeID] = &poolEntry{
+			client:     newClient,
+			lastUsedAt: time.Now(),
+		}
+		p.mu.Unlock()
+		return newClient, nil
+	})
 	if err != nil {
 		return nil, err
 	}
-
-	p.mu.Lock()
-	// 关闭旧连接（如果有）
-	if oldEntry, ok := p.clients[nodeID]; ok && oldEntry.client != nil {
-		go oldEntry.client.Close()
-	}
-	p.clients[nodeID] = &poolEntry{
-		client:     newClient,
-		lastUsedAt: time.Now(),
-	}
-	p.mu.Unlock()
-	return newClient, nil
+	return result.(*Client), nil
 }
 
 // Get 获取已有连接（不创建）

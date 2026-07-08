@@ -10,7 +10,7 @@ import (
 type Repositories struct {
 	Key        KeyRepository
 	ServerNode ServerNodeRepository
-	Template   TemplateRepository
+	Project    ProjectRepository
 	Task       TaskRepository
 	Setting    SettingRepository
 }
@@ -20,7 +20,7 @@ func New(db *gorm.DB) *Repositories {
 	return &Repositories{
 		Key:        &keyRepo{db: db},
 		ServerNode: &serverNodeRepo{db: db},
-		Template:   &templateRepo{db: db},
+		Project:    &projectRepo{db: db},
 		Task:       &taskRepo{db: db},
 		Setting:    &settingRepo{db: db},
 	}
@@ -76,7 +76,7 @@ func (r *keyRepo) Delete(id uint) error {
 
 func (r *keyRepo) CountUsage(id uint) (int64, error) {
 	var count int64
-	err := r.db.Model(&model.Template{}).Where("ssh_key_id = ?", id).Count(&count).Error
+	err := r.db.Model(&model.Project{}).Where("ssh_key_id = ?", id).Count(&count).Error
 	return count, err
 }
 
@@ -105,36 +105,36 @@ func (r *keyRepo) DeleteSystemKeysNotIn(names []string) error {
 	return r.db.Where("source = ? AND name NOT IN ?", "system", names).Delete(&model.SSHKey{}).Error
 }
 
-// TemplateRepository 模板仓库接口
-type TemplateRepository interface {
-	Create(t *model.Template) error
-	Get(id uint) (*model.Template, error)
-	List(page, pageSize int, status string) ([]model.Template, int64, error)
-	Update(t *model.Template) error
+// ProjectRepository 项目仓库接口
+type ProjectRepository interface {
+	Create(p *model.Project) error
+	Get(id uint) (*model.Project, error)
+	List(page, pageSize int, status string) ([]model.Project, int64, error)
+	Update(p *model.Project) error
 	Delete(id uint) error
 }
 
-type templateRepo struct {
+type projectRepo struct {
 	db *gorm.DB
 }
 
-func (r *templateRepo) Create(t *model.Template) error {
-	return r.db.Create(t).Error
+func (r *projectRepo) Create(p *model.Project) error {
+	return r.db.Create(p).Error
 }
 
-func (r *templateRepo) Get(id uint) (*model.Template, error) {
-	var t model.Template
-	if err := r.db.First(&t, id).Error; err != nil {
+func (r *projectRepo) Get(id uint) (*model.Project, error) {
+	var p model.Project
+	if err := r.db.First(&p, id).Error; err != nil {
 		return nil, err
 	}
-	return &t, nil
+	return &p, nil
 }
 
-func (r *templateRepo) List(page, pageSize int, status string) ([]model.Template, int64, error) {
-	var templates []model.Template
+func (r *projectRepo) List(page, pageSize int, status string) ([]model.Project, int64, error) {
+	var projects []model.Project
 	var total int64
 
-	query := r.db.Model(&model.Template{})
+	query := r.db.Model(&model.Project{})
 	if status != "" {
 		query = query.Where("status = ?", status)
 	}
@@ -143,26 +143,26 @@ func (r *templateRepo) List(page, pageSize int, status string) ([]model.Template
 		return nil, 0, err
 	}
 
-	if err := query.Offset((page - 1) * pageSize).Limit(pageSize).Find(&templates).Error; err != nil {
+	if err := query.Offset((page - 1) * pageSize).Limit(pageSize).Find(&projects).Error; err != nil {
 		return nil, 0, err
 	}
-	return templates, total, nil
+	return projects, total, nil
 }
 
-func (r *templateRepo) Update(t *model.Template) error {
-	return r.db.Save(t).Error
+func (r *projectRepo) Update(p *model.Project) error {
+	return r.db.Save(p).Error
 }
 
-func (r *templateRepo) Delete(id uint) error {
-	return r.db.Delete(&model.Template{}, id).Error
+func (r *projectRepo) Delete(id uint) error {
+	return r.db.Delete(&model.Project{}, id).Error
 }
 
 // TaskRepository 部署任务仓库接口
 type TaskRepository interface {
 	Create(task *model.DeployTask) error
 	Get(id uint) (*model.DeployTask, error)
-	List(templateID uint, status string, page, pageSize int) ([]model.DeployTask, int64, error)
-	GetLatestByTemplate(templateID uint, status string) (*model.DeployTask, error)
+	List(projectID uint, status string, page, pageSize int) ([]model.DeployTask, int64, error)
+	GetLatestByProject(projectID uint, status string) (*model.DeployTask, error)
 	Update(task *model.DeployTask) error
 }
 
@@ -182,13 +182,13 @@ func (r *taskRepo) Get(id uint) (*model.DeployTask, error) {
 	return &task, nil
 }
 
-func (r *taskRepo) List(templateID uint, status string, page, pageSize int) ([]model.DeployTask, int64, error) {
+func (r *taskRepo) List(projectID uint, status string, page, pageSize int) ([]model.DeployTask, int64, error) {
 	var tasks []model.DeployTask
 	var total int64
 
 	query := r.db.Model(&model.DeployTask{})
-	if templateID > 0 {
-		query = query.Where("template_id = ?", templateID)
+	if projectID > 0 {
+		query = query.Where("project_id = ?", projectID)
 	}
 	if status != "" {
 		query = query.Where("status = ?", status)
@@ -204,9 +204,9 @@ func (r *taskRepo) List(templateID uint, status string, page, pageSize int) ([]m
 	return tasks, total, nil
 }
 
-func (r *taskRepo) GetLatestByTemplate(templateID uint, status string) (*model.DeployTask, error) {
+func (r *taskRepo) GetLatestByProject(projectID uint, status string) (*model.DeployTask, error) {
 	var task model.DeployTask
-	query := r.db.Where("template_id = ?", templateID)
+	query := r.db.Where("project_id = ?", projectID)
 	if status != "" {
 		query = query.Where("status = ?", status)
 	}

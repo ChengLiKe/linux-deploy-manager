@@ -61,25 +61,31 @@ func createNVMEnv(version string) error {
 	if _, err := os.Stat(nvmSh); err != nil {
 		return fmt.Errorf("nvm not installed")
 	}
-	script := fmt.Sprintf("source %s && nvm install %s", nvmSh, version)
+	script := fmt.Sprintf("source %s && nvm install %s", sysutil.ShellEscape(nvmSh), sysutil.ShellEscape(version))
 	cmd := sysutil.ShellCommand(script)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("nvm install failed: %w\noutput: %s", err, string(output))
+	}
+	return nil
 }
 
 func createCondaEnv(name string) error {
-	cmd := sysutil.ShellCommand(fmt.Sprintf("conda create -n %s -y", name))
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
+	cmd := sysutil.ShellCommand(fmt.Sprintf("conda create -n %s -y", sysutil.ShellEscape(name)))
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("conda create failed: %w\noutput: %s", err, string(output))
+	}
+	return nil
 }
 
 func createPyenvEnv(version string) error {
-	cmd := sysutil.ShellCommand(fmt.Sprintf("pyenv install %s", version))
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
+	cmd := sysutil.ShellCommand(fmt.Sprintf("pyenv install %s", sysutil.ShellEscape(version)))
+	output, err := cmd.CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("pyenv install failed: %w\noutput: %s", err, string(output))
+	}
+	return nil
 }
 
 func homeDir() string {

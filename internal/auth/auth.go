@@ -39,7 +39,15 @@ func (s *Service) SetupPassword(password string) error {
 	if err != nil {
 		return fmt.Errorf("hash password: %w", err)
 	}
-	return os.WriteFile(filepath.Join(s.dataDir, passwordFile), hash, 0600)
+	return s.writeSecureFile(filepath.Join(s.dataDir, passwordFile), hash)
+}
+
+// writeSecureFile 写入文件并确保权限为 0600
+func (s *Service) writeSecureFile(path string, data []byte) error {
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		return err
+	}
+	return os.Chmod(path, 0600)
 }
 
 // VerifyPassword 验证密码
@@ -104,7 +112,7 @@ func (s *Service) getJWTKey() ([]byte, error) {
 		return nil, fmt.Errorf("generate jwt key: %w", err)
 	}
 
-	if err := os.WriteFile(keyPath, key, 0600); err != nil {
+	if err := s.writeSecureFile(keyPath, key); err != nil {
 		return nil, fmt.Errorf("write jwt key: %w", err)
 	}
 	return key, nil

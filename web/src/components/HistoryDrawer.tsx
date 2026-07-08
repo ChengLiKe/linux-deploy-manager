@@ -4,8 +4,8 @@ import { taskApi } from '../utils/api'
 import LogModal from './LogModal'
 
 interface HistoryDrawerProps {
-  templateId: number
-  templateName: string
+  projectId: number
+  projectName: string
   onClose: () => void
 }
 
@@ -17,7 +17,7 @@ const statusMap: Record<string, { label: string; cls: string }> = {
   cancelled: { label: '已取消', cls: 'bg-slate-100 text-slate-500' },
 }
 
-export default function HistoryDrawer({ templateId, templateName, onClose }: HistoryDrawerProps) {
+export default function HistoryDrawer({ projectId, projectName, onClose }: HistoryDrawerProps) {
   const [history, setHistory] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [logTarget, setLogTarget] = useState<number | null>(null)
@@ -25,7 +25,7 @@ export default function HistoryDrawer({ templateId, templateName, onClose }: His
   useEffect(() => {
     (async () => {
       try {
-        const res = await taskApi.list({ template_id: templateId, page_size: 20 })
+        const res = await taskApi.list({ project_id: projectId, page_size: 20 })
         setHistory(res.data.data?.items || [])
       } catch (err) {
         console.error('加载部署历史失败:', err)
@@ -33,7 +33,7 @@ export default function HistoryDrawer({ templateId, templateName, onClose }: His
         setLoading(false)
       }
     })()
-  }, [templateId])
+  }, [projectId])
 
   const formatTime = (value?: string) => {
     if (!value) return ''
@@ -48,7 +48,7 @@ export default function HistoryDrawer({ templateId, templateName, onClose }: His
         <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200 shrink-0">
           <div className="flex items-center gap-2 min-w-0">
             <Clock size={15} className="text-slate-400 shrink-0" />
-            <h3 className="font-semibold text-slate-800 text-sm truncate">{templateName} - 部署历史</h3>
+            <h3 className="font-semibold text-slate-800 text-sm truncate">{projectName} - 部署历史</h3>
           </div>
           <button onClick={onClose} className="p-1 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg shrink-0">
             <X size={16} />

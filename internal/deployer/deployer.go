@@ -126,7 +126,10 @@ func (d *Deployer) Execute(ctx context.Context, taskID string, cfg *Config, exec
 		buf.Writef("[Git] 拉取失败: %v", err)
 		return fmt.Errorf("git pull: %w", err)
 	}
-	commitSHA, _ := gitService.GetCommitSHA(actualCodeDir)
+	commitSHA, err := gitService.GetCommitSHA(actualCodeDir)
+	if err != nil {
+		buf.Writef("[Git] 获取 Commit SHA 失败: %s", err.Error())
+	}
 	buf.Writef("[Git] 拉取完成, Commit: %s", commitSHA)
 
 	// 2. 写入环境变量
@@ -273,90 +276,6 @@ func (d *Deployer) runCommand(ctx context.Context, buf *LogBuffer, executor Exec
 	stdoutW := newLogWriter(buf, "")
 	stderrW := newLogWriter(buf, "[stderr] ")
 	return executor.Run(ctx, command, stdoutW, stderrW)
-}
-
-// runCommandLegacy 保留本地执行版本（Deprecated，仅用于向后兼容）
-// sudoPassword 可选，若提供则使用 sudo -S 执行命令
-func (d *Deployer) runCommandLegacy(ctx context.Context, buf *LogBuffer, command, workDir string, envVars map[string]string, timeoutSec int, sudoPassword ...string) error {
-	if timeoutSec <= 0 {
-		timeoutSec = 600
-	}
-
-	ctx, cancel := context.WithTimeout(ctx, time.Duration(timeoutSec)*time.Second)
-	defer cancel()
-
-	useSudo := len(sudoPassword) > 0 && sudoPassword[0] != ""
-	var cmd *exec.Cmd
-	if useSudo {
-		cmd = sysutil.ShellCommandContextWithSudo(ctx, command, sudoPassword[0])
-	} else {
-		cmd = sysutil.ShellCommandContext(ctx, command)
-	}
-	cmd.Dir = workDir
-
-	// 注入环境变量
-	for k, v := range envVars {
-		cmd.Env = append(os.Environ(), fmt.Sprintf("%s=%s", k, v))
-	}
-
-	// 捕获输出
-	stdout, _ := cmd.StdoutPipe()
-	stderr, _ := cmd.StderrPipe()
-
-	if useSudo && sysutil.IsUnixLike() {
-		stdin, err := cmd.StdinPipe()
-		if err != nil {
-			return fmt.Errorf("create stdin pipe: %w", err)
-		}
-		go func() {
-			defer stdin.Close()
-			io.WriteString(stdin, sudoPassword[0]+"\n")
-		}()
-	}
-
-	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("start command: %w", err)
-	}
-
-	// 实时读取 stdout
-	go func() {
-		scanBuf := make([]byte, 1024)
-		for {
-			n, err := stdout.Read(scanBuf)
-			if n > 0 {
-				buf.Writef("%s", string(scanBuf[:n]))
-			}
-			if err != nil {
-				break
-			}
-		}
-	}()
-
-	// 实时读取 stderr
-	go func() {
-		scanBuf := make([]byte, 1024)
-		for {
-			n, err := stderr.Read(scanBuf)
-			if n > 0 {
-				buf.Writef("[stderr] %s", string(scanBuf[:n]))
-			}
-			if err != nil {
-				break
-			}
-		}
-	}()
-
-	// 等待命令完成
-	err := cmd.Wait()
-	if ctx.Err() == context.DeadlineExceeded {
-		// 超时：优雅终止后强制结束（跨平台）
-		terminateCmd(cmd, true)
-		return fmt.Errorf("command timed out after %ds", timeoutSec)
-	}
-	if err != nil {
-		return fmt.Errorf("command failed: %w", err)
-	}
-	return nil
 }
 
 // writeEnvFile 写入 .env 文件
@@ -787,7 +706,7 @@ func (d *Deployer) mkdirRemote(ctx context.Context, executor Executor, dir strin
 // writeRemoteFile 通过 Executor 写入远程文件（使用 base64 编码避免特殊字符问题）
 func (d *Deployer) writeRemoteFile(ctx context.Context, executor Executor, remotePath, content string, perm uint32) error {
 	encoded := base64.StdEncoding.EncodeToString([]byte(content))
-	cmd := fmt.Sprintf("echo '%s' | base64 -d > %s && chmod %o %s", encoded, remotePath, perm, remotePath)
+	cmd := fmt.Sprintf("echo '%s' | base64 -d > %s && chmod %o %s", encoded, sysutil.ShellEscape(remotePath), perm, sysutil.ShellEscape(remotePath))
 	return executor.Run(ctx, cmd, io.Discard, io.Discard)
 }
 
@@ -806,6 +725,6 @@ func (d *Deployer) writeEnvFileRemote(executor Executor, vars map[string]string,
 		return nil
 	}
 	encoded := base64.StdEncoding.EncodeToString([]byte(content))
-	cmd := fmt.Sprintf("echo '%s' | base64 -d > %s", encoded, envPath)
+	cmd := fmt.Sprintf("echo '%s' | base64 -d > %s", encoded, sysutil.ShellEscape(envPath))
 	return executor.Run(context.Background(), cmd, io.Discard, io.Discard)
 }

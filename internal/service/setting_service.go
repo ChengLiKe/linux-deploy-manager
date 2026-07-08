@@ -1,6 +1,10 @@
 package service
 
-import "github.com/linux-deploy-manager/internal/repository"
+import (
+	"fmt"
+
+	"github.com/linux-deploy-manager/internal/repository"
+)
 
 // SettingService 项目级设置服务
 type SettingService struct {
@@ -13,19 +17,28 @@ func NewSettingService(repo repository.SettingRepository) *SettingService {
 }
 
 const (
-	// SettingKeySudoPassword sudo 密码设置项
 	SettingKeySudoPassword = "sudo_password"
-	// SettingKeySudoEnabled 是否启用 sudo 执行 docker 命令
-	SettingKeySudoEnabled = "sudo_enabled"
+	SettingKeySudoEnabled  = "sudo_enabled"
+	SettingKeyTheme        = "theme"
 )
 
-// Get 获取设置值
+// allowedSettingKeys 允许通过 API 设置的白名单 key
+var allowedSettingKeys = map[string]bool{
+	SettingKeySudoPassword: true,
+	SettingKeySudoEnabled:  true,
+	SettingKeyTheme:        true,
+}
+
+// Get 获取配置值
 func (s *SettingService) Get(key string) (string, error) {
 	return s.repo.Get(key)
 }
 
-// Set 设置值
+// Set 设置配置项（仅允许白名单 key）
 func (s *SettingService) Set(key, value string) error {
+	if !allowedSettingKeys[key] {
+		return fmt.Errorf("setting key %q is not allowed", key)
+	}
 	return s.repo.Set(key, value)
 }
 
@@ -39,20 +52,16 @@ func (s *SettingService) SetSudoPassword(password string) error {
 	return s.repo.Set(SettingKeySudoPassword, password)
 }
 
-// GetSudoEnabled 获取是否启用 sudo
+// GetSudoEnabled 获取 sudo 是否启用
 func (s *SettingService) GetSudoEnabled() (bool, error) {
 	val, err := s.repo.Get(SettingKeySudoEnabled)
-	if err != nil || val == "" {
+	if err != nil {
 		return false, err
 	}
 	return val == "true", nil
 }
 
-// SetSudoEnabled 设置是否启用 sudo
+// SetSudoEnabled 设置 sudo 是否启用
 func (s *SettingService) SetSudoEnabled(enabled bool) error {
-	val := "false"
-	if enabled {
-		val = "true"
-	}
-	return s.repo.Set(SettingKeySudoEnabled, val)
+	return s.repo.Set(SettingKeySudoEnabled, fmt.Sprintf("%t", enabled))
 }
