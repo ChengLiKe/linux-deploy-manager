@@ -19,14 +19,17 @@ jobs:
         with:
           node-version: '22'
 
+      # 必须先构建前端 — Go 的 go:embed web/dist 依赖这个目录
+      - name: 构建前端
+        run: |
+          cd web
+          npm install --ignore-scripts
+          npm run build
+          mkdir -p ../cmd/server/web
+          cp -r dist ../cmd/server/web/
+
       - name: Go 编译
         run: CGO_ENABLED=0 go build ./cmd/server
 
       - name: Go 测试
         run: go test ./...
-
-      - name: 前端构建
-        run: |
-          cd web
-          npm install --ignore-scripts
-          npm run build

@@ -6,8 +6,34 @@ on:
       - 'v*'
 
 jobs:
+  # 前端先构建，因为 Go 的 go:embed 依赖它
+  build-frontend:
+    name: 构建前端
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22.14'
+
+      - name: npm install
+        run: npm install --ignore-scripts
+        working-directory: web
+
+      - name: npm build
+        run: npm run build
+        working-directory: web
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: web-dist
+          path: web/dist/
+
   build-go:
     name: 编译 Go 二进制
+    needs: [build-frontend]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     outputs:
@@ -15,12 +41,15 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      # 下载前端产物到 go:embed 目录
+      - uses: actions/download-artifact@v7
+        with:
+          name: web-dist
+          path: cmd/server/web/dist/
+
       - uses: actions/setup-go@v6
         with:
           go-version: '1.22'
-
-      - name: Go 版本
-        run: go version && go env
 
       - name: 提取版本号
         id: version
@@ -30,18 +59,21 @@ jobs:
 
       - name: 编译 Linux amd64
         run: |
+          mkdir -p bin/linux
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
             -ldflags "-s -w -X main.version=${{ steps.version.outputs.VERSION }}" \
             -o bin/linux/linux-deploy-manager ./cmd/server
 
       - name: 编译 Windows amd64
         run: |
+          mkdir -p bin/win32
           CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build \
             -ldflags "-s -w -X main.version=${{ steps.version.outputs.VERSION }}" \
             -o bin/win32/linux-deploy-manager.exe ./cmd/server
 
       - name: 编译 macOS amd64
         run: |
+          mkdir -p bin/darwin
           CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build \
             -ldflags "-s -w -X main.version=${{ steps.version.outputs.VERSION }}" \
             -o bin/darwin/linux-deploy-manager-amd64 ./cmd/server
@@ -56,33 +88,6 @@ jobs:
         with:
           name: go-binaries
           path: bin/
-
-  build-frontend:
-    name: 构建前端
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v5
-
-      - uses: actions/setup-node@v6
-        with:
-          node-version: '22.14'
-
-      - name: Node 版本
-        run: node --version && npm --version
-
-      - name: npm install
-        run: npm install --ignore-scripts --ignore-scripts
-        working-directory: web
-
-      - name: npm build
-        run: npm run build
-        working-directory: web
-
-      - uses: actions/upload-artifact@v6
-        with:
-          name: web-dist
-          path: web/dist/
 
   package:
     name: 打包 ${{ matrix.label }}
