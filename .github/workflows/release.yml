@@ -22,7 +22,6 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
-          cache: false
 
       - name: 验证 Go 版本
         run: go version
@@ -73,7 +72,6 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: false
 
       - name: 验证 Node.js 版本
         run: node --version && npm --version
@@ -123,7 +121,6 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: false
 
       # 下载跨平台编译好的 Go 二进制
       - name: 下载 Go 二进制
