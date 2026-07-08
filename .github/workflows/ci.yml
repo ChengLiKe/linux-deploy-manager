@@ -7,8 +7,8 @@ on:
     branches: [main, master]
 
 env:
-  GO_VERSION: '1.22'
-  NODE_VERSION: '24'
+  GO_VERSION: '1.22.11'
+  NODE_VERSION: '22.14.0'
 
 jobs:
   # ── Go 后端检查和测试 ───────────────────────────────
@@ -21,6 +21,10 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
+          cache: false
+
+      - name: 验证 Go 版本
+        run: go version
 
       - name: 验证代码
         run: go vet ./...
@@ -29,7 +33,7 @@ jobs:
         run: CGO_ENABLED=0 go build -ldflags '-s -w' -o /dev/null ./cmd/server
 
       - name: 运行测试
-        run: go test -v -race -count=1 ./...
+        run: go test -v -count=1 ./...
 
   # ── 前端构建 ────────────────────────────────────────
   frontend-check:
@@ -41,8 +45,10 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-          cache-dependency-path: web/package-lock.json
+          cache: false
+
+      - name: 验证 Node.js 版本
+        run: node --version && npm --version
 
       - name: 安装依赖
         run: |
@@ -64,28 +70,23 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
+          cache: false
 
       - uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
+          cache: false
+
+      - name: 验证版本
+        run: go version && node --version && npm --version
 
       - name: 编译全平台 Go 二进制
         run: |
-          LDFLAGS="-s -w -X main.version=ci-test -X main.buildTime=$(date +%Y%m%d-%H%M%S) -X main.gitCommit=${GITHUB_SHA::7}"
-
-          # Linux
-          mkdir -p bin/linux
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "$LDFLAGS" -o bin/linux/linux-deploy-manager ./cmd/server
-
-          # Windows
-          mkdir -p bin/win32
-          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags "$LDFLAGS" -o bin/win32/linux-deploy-manager.exe ./cmd/server
-
-          # macOS amd64 + arm64
-          mkdir -p bin/darwin
-          CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags "$LDFLAGS" -o bin/darwin/linux-deploy-manager-amd64 ./cmd/server
-          CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags "$LDFLAGS" -o bin/darwin/linux-deploy-manager-arm64 ./cmd/server
+          mkdir -p bin/linux bin/win32 bin/darwin
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags '-s -w' -o bin/linux/linux-deploy-manager ./cmd/server
+          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags '-s -w' -o bin/win32/linux-deploy-manager.exe ./cmd/server
+          CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags '-s -w' -o bin/darwin/linux-deploy-manager-amd64 ./cmd/server
+          CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags '-s -w' -o bin/darwin/linux-deploy-manager-arm64 ./cmd/server
 
       - name: 构建前端
         run: |

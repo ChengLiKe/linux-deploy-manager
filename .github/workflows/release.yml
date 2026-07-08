@@ -6,8 +6,8 @@ on:
       - 'v*'
 
 env:
-  GO_VERSION: '1.22'
-  NODE_VERSION: '24'
+  GO_VERSION: '1.22.11'
+  NODE_VERSION: '22.14.0'
 
 jobs:
   # ── 构建 Go 后端二进制（跨平台交叉编译） ──────────────
@@ -22,32 +22,41 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
+          cache: false
+
+      - name: 验证 Go 版本
+        run: go version
 
       - name: 提取版本号
         id: version
         run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
 
-      - name: 编译 Go 后端（全平台）
+      - name: 编译 Linux amd64
         run: |
-          V=${{ steps.version.outputs.version }}
-          BT=$(date +%Y%m%d-%H%M%S)
-          GH=${GITHUB_SHA::7}
-          LDFLAGS="-s -w -X main.version=${V} -X main.buildTime=${BT} -X main.gitCommit=${GH}"
-
-          # Linux amd64
           mkdir -p bin/linux
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "$LDFLAGS" -o bin/linux/linux-deploy-manager ./cmd/server
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+            -ldflags "-s -w -X main.version=${{ steps.version.outputs.version }} -X main.buildTime=$(date +%Y%m%d-%H%M%S) -X main.gitCommit=${GITHUB_SHA::7}" \
+            -o bin/linux/linux-deploy-manager ./cmd/server
 
-          # Windows amd64
+      - name: 编译 Windows amd64
+        run: |
           mkdir -p bin/win32
-          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags "$LDFLAGS" -o bin/win32/linux-deploy-manager.exe ./cmd/server
+          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build \
+            -ldflags "-s -w -X main.version=${{ steps.version.outputs.version }} -X main.buildTime=$(date +%Y%m%d-%H%M%S) -X main.gitCommit=${GITHUB_SHA::7}" \
+            -o bin/win32/linux-deploy-manager.exe ./cmd/server
 
-          # macOS amd64
+      - name: 编译 macOS amd64
+        run: |
           mkdir -p bin/darwin
-          CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags "$LDFLAGS" -o bin/darwin/linux-deploy-manager-amd64 ./cmd/server
+          CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build \
+            -ldflags "-s -w -X main.version=${{ steps.version.outputs.version }} -X main.buildTime=$(date +%Y%m%d-%H%M%S) -X main.gitCommit=${GITHUB_SHA::7}" \
+            -o bin/darwin/linux-deploy-manager-amd64 ./cmd/server
 
-          # macOS arm64
-          CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags "$LDFLAGS" -o bin/darwin/linux-deploy-manager-arm64 ./cmd/server
+      - name: 编译 macOS arm64
+        run: |
+          CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build \
+            -ldflags "-s -w -X main.version=${{ steps.version.outputs.version }} -X main.buildTime=$(date +%Y%m%d-%H%M%S) -X main.gitCommit=${GITHUB_SHA::7}" \
+            -o bin/darwin/linux-deploy-manager-arm64 ./cmd/server
 
       - uses: actions/upload-artifact@v6
         with:
@@ -64,8 +73,10 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
-          cache-dependency-path: web/package-lock.json
+          cache: false
+
+      - name: 验证 Node.js 版本
+        run: node --version && npm --version
 
       - name: 安装依赖并构建
         run: |
@@ -112,7 +123,7 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
+          cache: false
 
       # 下载跨平台编译好的 Go 二进制
       - name: 下载 Go 二进制
@@ -132,7 +143,6 @@ jobs:
       - name: 合并 macOS 通用二进制
         if: matrix.platform == 'mac'
         run: |
-          ls -la bin/darwin/
           lipo -create \
             bin/darwin/linux-deploy-manager-amd64 \
             bin/darwin/linux-deploy-manager-arm64 \
@@ -144,7 +154,6 @@ jobs:
       - name: 验证 Go 二进制
         run: |
           ls -la bin/${{ matrix.go-binary-dir }}/${{ matrix.binary-name }}
-          file bin/${{ matrix.go-binary-dir }}/${{ matrix.binary-name }}
 
       - name: 安装 Node 依赖
         run: npm ci
