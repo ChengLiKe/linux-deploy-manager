@@ -7,7 +7,7 @@ on:
 
 env:
   GO_VERSION: '1.22'
-  NODE_VERSION: '22'
+  NODE_VERSION: '24'
 
 jobs:
   # ── 构建 Go 后端二进制（跨平台交叉编译） ──────────────
