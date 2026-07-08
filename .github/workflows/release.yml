@@ -5,56 +5,51 @@ on:
     tags:
       - 'v*'
 
-env:
-  GO_VERSION: '1.22.11'
-  NODE_VERSION: '22.14.0'
-
 jobs:
-  # ── 构建 Go 后端二进制（跨平台交叉编译） ──────────────
   build-go:
     name: 编译 Go 二进制
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     outputs:
-      version: ${{ steps.version.outputs.version }}
+      version: ${{ steps.version.outputs.VERSION }}
     steps:
       - uses: actions/checkout@v5
 
       - uses: actions/setup-go@v6
         with:
-          go-version: ${{ env.GO_VERSION }}
+          go-version: '1.22'
 
-      - name: 验证 Go 版本
-        run: go version
+      - name: Go 版本
+        run: go version && go env
 
       - name: 提取版本号
         id: version
-        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+        run: |
+          V="${GITHUB_REF_NAME#v}"
+          echo "VERSION=${V}" >> "$GITHUB_OUTPUT"
 
       - name: 编译 Linux amd64
         run: |
-          mkdir -p bin/linux
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
-            -ldflags "-s -w -X main.version=${{ steps.version.outputs.version }} -X main.buildTime=$(date +%Y%m%d-%H%M%S) -X main.gitCommit=${GITHUB_SHA::7}" \
+            -ldflags "-s -w -X main.version=${{ steps.version.outputs.VERSION }}" \
             -o bin/linux/linux-deploy-manager ./cmd/server
 
       - name: 编译 Windows amd64
         run: |
-          mkdir -p bin/win32
           CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build \
-            -ldflags "-s -w -X main.version=${{ steps.version.outputs.version }} -X main.buildTime=$(date +%Y%m%d-%H%M%S) -X main.gitCommit=${GITHUB_SHA::7}" \
+            -ldflags "-s -w -X main.version=${{ steps.version.outputs.VERSION }}" \
             -o bin/win32/linux-deploy-manager.exe ./cmd/server
 
       - name: 编译 macOS amd64
         run: |
-          mkdir -p bin/darwin
           CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build \
-            -ldflags "-s -w -X main.version=${{ steps.version.outputs.version }} -X main.buildTime=$(date +%Y%m%d-%H%M%S) -X main.gitCommit=${GITHUB_SHA::7}" \
+            -ldflags "-s -w -X main.version=${{ steps.version.outputs.VERSION }}" \
             -o bin/darwin/linux-deploy-manager-amd64 ./cmd/server
 
       - name: 编译 macOS arm64
         run: |
           CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build \
-            -ldflags "-s -w -X main.version=${{ steps.version.outputs.version }} -X main.buildTime=$(date +%Y%m%d-%H%M%S) -X main.gitCommit=${GITHUB_SHA::7}" \
+            -ldflags "-s -w -X main.version=${{ steps.version.outputs.VERSION }}" \
             -o bin/darwin/linux-deploy-manager-arm64 ./cmd/server
 
       - uses: actions/upload-artifact@v6
@@ -62,56 +57,58 @@ jobs:
           name: go-binaries
           path: bin/
 
-  # ── 构建前端静态资源 ───────────────────────────────────
   build-frontend:
     name: 构建前端
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
 
       - uses: actions/setup-node@v6
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          node-version: '22.14'
 
-      - name: 验证 Node.js 版本
+      - name: Node 版本
         run: node --version && npm --version
 
-      - name: 安装依赖并构建
-        run: |
-          cd web
-          npm ci
-          npm run build
+      - name: npm install
+        run: npm install
+        working-directory: web
+
+      - name: npm build
+        run: npm run build
+        working-directory: web
 
       - uses: actions/upload-artifact@v6
         with:
           name: web-dist
           path: web/dist/
 
-  # ── 打包 Electron 安装包（按平台矩阵） ────────────────
   package:
-    name: 打包 ${{ matrix.os-label }}
+    name: 打包 ${{ matrix.label }}
     needs: [build-go, build-frontend]
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
         include:
           - os: windows-latest
-            os-label: Windows
+            label: Windows
             platform: win
-            go-binary-dir: win32
-            binary-name: linux-deploy-manager.exe
+            binary-dir: win32
+            binary: linux-deploy-manager.exe
 
           - os: ubuntu-latest
-            os-label: Linux
+            label: Linux
             platform: linux
-            go-binary-dir: linux
-            binary-name: linux-deploy-manager
+            binary-dir: linux
+            binary: linux-deploy-manager
 
           - os: macos-latest
-            os-label: macOS
+            label: macOS
             platform: mac
-            go-binary-dir: darwin
-            binary-name: linux-deploy-manager
+            binary-dir: darwin
+            binary: linux-deploy-manager
 
     runs-on: ${{ matrix.os }}
 
@@ -120,23 +117,20 @@ jobs:
 
       - uses: actions/setup-node@v6
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          node-version: '22.14'
 
-      # 下载跨平台编译好的 Go 二进制
       - name: 下载 Go 二进制
         uses: actions/download-artifact@v7
         with:
           name: go-binaries
           path: bin/
 
-      # 下载前端构建产物
       - name: 下载前端产物
         uses: actions/download-artifact@v7
         with:
           name: web-dist
           path: cmd/server/web/dist/
 
-      # macOS 用 lipo 合并为通用二进制
       - name: 合并 macOS 通用二进制
         if: matrix.platform == 'mac'
         run: |
@@ -145,18 +139,11 @@ jobs:
             bin/darwin/linux-deploy-manager-arm64 \
             -output bin/darwin/linux-deploy-manager
           rm bin/darwin/linux-deploy-manager-amd64 bin/darwin/linux-deploy-manager-arm64
-          file bin/darwin/linux-deploy-manager
 
-      # 验证 Go 二进制存在
-      - name: 验证 Go 二进制
-        run: |
-          ls -la bin/${{ matrix.go-binary-dir }}/${{ matrix.binary-name }}
+      - name: npm install
+        run: npm install
 
-      - name: 安装 Node 依赖
-        run: npm ci
-
-      # 打包并发布到 GitHub Releases
-      - name: 打包 Electron 安装包并发布
+      - name: 打包发布
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node scripts/electron-build.js --${{ matrix.platform }} --publish

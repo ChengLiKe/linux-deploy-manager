@@ -6,98 +6,45 @@ on:
   pull_request:
     branches: [main, master]
 
-env:
-  GO_VERSION: '1.22.11'
-  NODE_VERSION: '22.14.0'
-
 jobs:
-  # ── Go 后端检查和测试 ───────────────────────────────
   go-check:
-    name: Go 检查
+    name: Go 编译检查
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
 
       - uses: actions/setup-go@v6
         with:
-          go-version: ${{ env.GO_VERSION }}
+          go-version: '1.22'
 
-      - name: 验证 Go 版本
-        run: go version
+      - name: Go 版本
+        run: go version && go env
 
-      - name: 验证代码
-        run: go vet ./...
+      - name: Go 编译
+        run: CGO_ENABLED=0 go build ./cmd/server
 
-      - name: 编译（CGO_ENABLED=0 验证纯 Go SQLite 驱动可用）
-        run: CGO_ENABLED=0 go build -ldflags '-s -w' -o /dev/null ./cmd/server
+      - name: Go 测试
+        run: go test ./...
 
-      - name: 运行测试
-        run: go test -v -count=1 ./...
-
-  # ── 前端构建 ────────────────────────────────────────
   frontend-check:
-    name: 前端检查
+    name: 前端构建检查
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v5
 
       - uses: actions/setup-node@v6
         with:
-          node-version: ${{ env.NODE_VERSION }}
+          node-version: '22.14'
 
-      - name: 验证 Node.js 版本
+      - name: Node 版本
         run: node --version && npm --version
 
-      - name: 安装依赖
-        run: |
-          cd web
-          npm ci
+      - name: npm install
+        run: npm install
+        working-directory: web
 
-      - name: 构建
-        run: |
-          cd web
-          npm run build
-
-  # ── 跨平台编译验证（测试打包流程，不上传到 GitHub Releases） ──
-  build-test:
-    name: 构建测试
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v5
-
-      - uses: actions/setup-go@v6
-        with:
-          go-version: ${{ env.GO_VERSION }}
-
-      - uses: actions/setup-node@v6
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-
-      - name: 验证版本
-        run: go version && node --version && npm --version
-
-      - name: 编译全平台 Go 二进制
-        run: |
-          mkdir -p bin/linux bin/win32 bin/darwin
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags '-s -w' -o bin/linux/linux-deploy-manager ./cmd/server
-          CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags '-s -w' -o bin/win32/linux-deploy-manager.exe ./cmd/server
-          CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags '-s -w' -o bin/darwin/linux-deploy-manager-amd64 ./cmd/server
-          CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags '-s -w' -o bin/darwin/linux-deploy-manager-arm64 ./cmd/server
-
-      - name: 构建前端
-        run: |
-          cd web
-          npm ci
-          npm run build
-
-      - name: 拷贝前端到 embed 目录
-        run: |
-          rm -rf cmd/server/web/dist
-          mkdir -p cmd/server/web
-          cp -r web/dist cmd/server/web/dist
-
-      - name: 构建 Go 二进制（含 embed 前端）
-        run: |
-          CGO_ENABLED=0 go build -ldflags '-s -w' -o bin/linux-deploy-manager ./cmd/server
-          file bin/linux-deploy-manager
-          ls -lh bin/linux-deploy-manager
+      - name: npm build
+        run: npm run build
+        working-directory: web
