@@ -5,8 +5,8 @@ on:
     branches: [main, master, develop]
 
 jobs:
-  debug:
-    name: 调试构建
+  check:
+    name: 构建检查
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -19,44 +19,14 @@ jobs:
         with:
           node-version: '22'
 
-      - name: 环境信息
-        run: |
-          set -x
-          go version
-          go env GOPATH GOMODCACHE GOPROXY GOWORK GOFLAGS
-          node --version
-          npm --version
-          which npm
-          which go
-          pwd
-          ls -la
-          ls -la cmd/server/
-          ls -la web/
+      - name: Go 编译
+        run: CGO_ENABLED=0 go build ./cmd/server
 
-      - name: Go build 调试
-        run: |
-          set -x
-          CGO_ENABLED=0 go build -v ./cmd/server 2>&1 || true
-        continue-on-error: true
+      - name: Go 测试
+        run: go test ./...
 
-      - name: Go mod tidy 检查
+      - name: 前端构建
         run: |
-          set -x
-          go mod tidy 2>&1 || true
-        continue-on-error: true
-
-      - name: npm install 调试
-        run: |
-          set -x
           cd web
-          command -v npm
-          type npm
-          npm install 2>&1 || true
-        continue-on-error: true
-
-      - name: npm build 调试
-        run: |
-          set -x
-          cd web
-          npm run build 2>&1 || true
-        continue-on-error: true
+          npm install --ignore-scripts
+          npm run build

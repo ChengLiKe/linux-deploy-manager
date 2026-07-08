@@ -72,7 +72,7 @@ jobs:
         run: node --version && npm --version
 
       - name: npm install
-        run: npm install
+        run: npm install --ignore-scripts --ignore-scripts
         working-directory: web
 
       - name: npm build
@@ -141,7 +141,7 @@ jobs:
           rm bin/darwin/linux-deploy-manager-amd64 bin/darwin/linux-deploy-manager-arm64
 
       - name: npm install
-        run: npm install
+        run: npm install --ignore-scripts
 
       - name: 打包发布
         env:
