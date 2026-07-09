@@ -60,32 +60,12 @@ jobs:
           V="${GITHUB_REF_NAME#v}"
           echo "VERSION=${V}" >> "$GITHUB_OUTPUT"
 
-      - name: 编译 Linux amd64
-        run: |
-          mkdir -p bin/linux
-          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
-            -ldflags "-s -w -X main.version=${{ steps.version.outputs.VERSION }}" \
-            -o bin/linux/linux-deploy-manager ./cmd/server
-
       - name: 编译 Windows amd64
         run: |
           mkdir -p bin/win32
           CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build \
             -ldflags "-s -w -X main.version=${{ steps.version.outputs.VERSION }}" \
             -o bin/win32/linux-deploy-manager.exe ./cmd/server
-
-      - name: 编译 macOS amd64
-        run: |
-          mkdir -p bin/darwin
-          CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build \
-            -ldflags "-s -w -X main.version=${{ steps.version.outputs.VERSION }}" \
-            -o bin/darwin/linux-deploy-manager-amd64 ./cmd/server
-
-      - name: 编译 macOS arm64
-        run: |
-          CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build \
-            -ldflags "-s -w -X main.version=${{ steps.version.outputs.VERSION }}" \
-            -o bin/darwin/linux-deploy-manager-arm64 ./cmd/server
 
       - uses: actions/upload-artifact@v6
         with:
@@ -105,18 +85,6 @@ jobs:
             platform: win
             binary-dir: win32
             binary: linux-deploy-manager.exe
-
-          - os: ubuntu-latest
-            label: Linux
-            platform: linux
-            binary-dir: linux
-            binary: linux-deploy-manager
-
-          - os: macos-latest
-            label: macOS
-            platform: mac
-            binary-dir: darwin
-            binary: linux-deploy-manager
 
     runs-on: ${{ matrix.os }}
 
@@ -142,15 +110,6 @@ jobs:
         with:
           name: web-dist
           path: cmd/server/web/dist/
-
-      - name: 合并 macOS 通用二进制
-        if: matrix.platform == 'mac'
-        run: |
-          lipo -create \
-            bin/darwin/linux-deploy-manager-amd64 \
-            bin/darwin/linux-deploy-manager-arm64 \
-            -output bin/darwin/linux-deploy-manager
-          rm bin/darwin/linux-deploy-manager-amd64 bin/darwin/linux-deploy-manager-arm64
 
       - name: npm install
         run: npm install --ignore-scripts
