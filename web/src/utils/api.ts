@@ -118,6 +118,8 @@ export const serverNodeApi = {
   initLog: (id: number) => api.get(`/server-nodes/${id}/init-log`),
   distributeKey: (id: number, keyId: number) =>
     api.post(`/server-nodes/${id}/distribute-key`, { key_id: keyId }),
+  listDir: (id: number, path: string) =>
+    api.post(`/server-nodes/${id}/list-dir`, { path }),
 }
 
 export const fixApi = {

@@ -1,21 +1,17 @@
-const { app, BrowserWindow, ipcMain, dialog, Menu, Tray, nativeImage } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Menu, Tray, nativeImage, shell } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
 const fs = require('fs');
-const { autoUpdater } = require('electron-updater');
 
-// ── 自动更新配置 ────────────────────────────────────
-autoUpdater.logger = {
-  info: (msg) => console.log(`[AutoUpdater] ${msg}`),
-  warn: (msg) => console.warn(`[AutoUpdater] ${msg}`),
-  error: (msg) => console.error(`[AutoUpdater] ${msg}`),
-};
-// 开发模式不检查更新（除非强制）
-autoUpdater.autoDownload = false;
-autoUpdater.autoInstallOnAppQuit = true;
+// electron-updater 在 setupAutoUpdater 中懒加载
+let autoUpdater = null;
 
-// 标记打包状态，供 preload 读取
-process.env.LDM_IS_PACKAGED = app.isPackaged ? 'true' : 'false';
+// 标记打包状态——在 app ready 后调用
+function markPackaged() {
+  if (!process.env.LDM_IS_PACKAGED) {
+    process.env.LDM_IS_PACKAGED = app.isPackaged ? 'true' : 'false';
+  }
+}
 
 // 获取 Go 后端二进制路径
 function getServerBinaryPath() {
@@ -57,6 +53,18 @@ let goStderr = '';  // 捕获 Go 后端 stderr 用于诊断
 
 // ── 自动更新事件 ────────────────────────────────────
 function setupAutoUpdater() {
+  markPackaged();
+
+  // 懒加载 autoUpdater
+  autoUpdater = require('electron-updater').autoUpdater;
+  autoUpdater.logger = {
+    info: (msg) => console.log(`[AutoUpdater] ${msg}`),
+    warn: (msg) => console.warn(`[AutoUpdater] ${msg}`),
+    error: (msg) => console.error(`[AutoUpdater] ${msg}`),
+  };
+  autoUpdater.autoDownload = false;
+  autoUpdater.autoInstallOnAppQuit = true;
+
   if (!app.isPackaged) {
     console.log('[AutoUpdater] 开发模式，跳过自动更新');
     return;
@@ -369,6 +377,13 @@ ipcMain.handle('show-main-window', () => {
   if (mainWindow) {
     mainWindow.show();
     mainWindow.focus();
+  }
+});
+
+// 在系统默认浏览器中打开 URL
+ipcMain.handle('open-external', (_event, url) => {
+  if (typeof url === 'string' && url.startsWith('http')) {
+    shell.openExternal(url);
   }
 });
 

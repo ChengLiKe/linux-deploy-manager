@@ -3,6 +3,7 @@ import { useParams, useNavigate, Link } from 'react-router-dom'
 import { Play, Download, RotateCcw, ChevronDown, ChevronUp, Save, ArrowLeft, FolderOpen, ArrowUp } from 'lucide-react'
 import { projectApi, keyApi, taskApi, fsApi, envmanApi, serverNodeApi } from '../utils/api'
 import { useWebSocket } from '../hooks/useWebSocket'
+import DirBrowser from '../components/DirBrowser'
 import type { ServerNode } from '../types'
 
 interface SSHKey {
@@ -349,6 +350,7 @@ export default function TemplateForm() {
     message: string
   } | null>(null)
   const [dirChecking, setDirChecking] = useState(false)
+  const [dirBrowserOpen, setDirBrowserOpen] = useState(false)
   const dirCheckTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const [branch, setBranch] = useState('')
@@ -853,9 +855,20 @@ export default function TemplateForm() {
                       placeholder="/opt/apps"
                     />
                     <button
-                      onClick={() => fsApi.checkDir({ code_dir: form.code_dir, name: form.name, git_url: form.git_url })}
+                      type="button"
+                      onClick={() => {
+                        if (form.deploy_mode !== 'local' && !form.server_node_id) {
+                          setDirCheck({
+                            exists: false, has_git: false, remote_url: '',
+                            match: null,
+                            message: '远程部署请先选择目标服务器'
+                          })
+                          return
+                        }
+                        setDirBrowserOpen(true)
+                      }}
                       className="px-3 py-2 text-slate-500 hover:text-slate-700 hover:bg-slate-50 border border-slate-300 rounded-lg transition-colors"
-                      title="验证目录"
+                      title="浏览部署目录"
                     >
                       <FolderOpen size={18} />
                     </button>
@@ -1356,6 +1369,18 @@ export default function TemplateForm() {
             </Section>
           </div>
         )}
+
+        {/* 目录浏览器 */}
+      <DirBrowser
+        nodeId={form.deploy_mode !== 'local' ? form.server_node_id : 0}
+        localMode={form.deploy_mode === 'local'}
+        open={dirBrowserOpen}
+        onSelect={(path) => {
+          setForm({ ...form, code_dir: path })
+          setDirBrowserOpen(false)
+        }}
+        onClose={() => setDirBrowserOpen(false)}
+      />
 
         {/* ── 底部导航 ── */}
         <div className="flex items-center justify-between py-4">

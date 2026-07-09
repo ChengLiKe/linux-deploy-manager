@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, ArrowRight, RefreshCw, ExternalLink, Globe, Home, ChevronUp, ChevronDown } from 'lucide-react'
+import { ArrowLeft, ArrowRight, RefreshCw, ExternalLink, Globe, Home, ChevronUp, ChevronDown, X, AlertCircle } from 'lucide-react'
 
 export default function InlineBrowser() {
   const [searchParams] = useSearchParams()
@@ -20,6 +20,7 @@ export default function InlineBrowser() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [toolbarCollapsed, setToolbarCollapsed] = useState(false)
+  const [bannerDismissed, setBannerDismissed] = useState(false)
   const loadingTimer = useRef<ReturnType<typeof setTimeout>>()
 
   const canGoBack = historyIndex > 0
@@ -109,7 +110,7 @@ export default function InlineBrowser() {
   }, [])
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-screen w-screen overflow-hidden bg-white">
       {/* 浏览器工具栏 */}
       <div className={`shrink-0 bg-white border-b border-slate-200 shadow-sm transition-all duration-200 ${
         toolbarCollapsed ? '' : ''
@@ -190,14 +191,14 @@ export default function InlineBrowser() {
         )}
       </div>
 
-      {/* iframe 容器 */}
-      <div className={`flex-1 bg-white relative transition-all ${toolbarCollapsed ? 'h-full' : ''}`}>
+      {/* iframe 容器 — 用 calc 扣除工具栏高度 */}
+      <div className="flex-1 relative overflow-hidden">
         {currentUrl ? (
           <>
             <iframe
               key={iframeKey}
               src={currentUrl}
-              className="w-full h-full border-0"
+              className="absolute inset-0 w-full h-full border-0"
               sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-popups-to-escape-sandbox"
               onLoad={handleIframeLoad}
               onError={() => {
@@ -214,11 +215,27 @@ export default function InlineBrowser() {
                 </div>
               </div>
             )}
-            <div className="absolute bottom-4 left-4 right-4 flex justify-center pointer-events-none">
-              <div className="bg-slate-800/80 text-white text-[10px] px-3 py-1.5 rounded-full">
-                部分网站可能因安全策略限制无法加载，可使用「外部」按钮在系统浏览器中打开
+            {!bannerDismissed && (
+              <div className="absolute bottom-4 left-4 right-4 flex justify-center">
+                <div className="bg-slate-800/90 text-white text-[11px] px-4 py-2 rounded-full flex items-center gap-2 shadow-lg backdrop-blur-sm max-w-[600px]">
+                  <AlertCircle size={12} className="text-amber-400 shrink-0" />
+                  <span>部分网站可能因安全策略限制无法加载</span>
+                  <button
+                    onClick={() => window.open(currentUrl, '_blank')}
+                    className="text-amber-400 hover:text-amber-300 underline underline-offset-2 shrink-0 whitespace-nowrap"
+                  >
+                    外部打开
+                  </button>
+                  <button
+                    onClick={(e) => { e.stopPropagation(); setBannerDismissed(true) }}
+                    className="p-0.5 text-slate-500 hover:text-white rounded-full shrink-0 ml-1"
+                    title="关闭"
+                  >
+                    <X size={12} />
+                  </button>
+                </div>
               </div>
-            </div>
+            )}
           </>
         ) : (
           <div className="flex items-center justify-center h-full">

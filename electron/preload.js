@@ -20,6 +20,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // ── 窗口管理 ────────────────────────────────────
   /** 显示主窗口 */
   showMainWindow: () => ipcRenderer.invoke('show-main-window'),
+  /** 在系统默认浏览器打开 URL */
+  openExternal: (url) => ipcRenderer.invoke('open-external', url),
 
   // ── 自动更新 API ────────────────────────────────
   /** 手动检查更新 */

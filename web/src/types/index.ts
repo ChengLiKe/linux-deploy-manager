@@ -108,6 +108,7 @@ export interface ElectronAPI {
   getCloseBehavior(): Promise<string>
   // 窗口管理
   showMainWindow(): Promise<void>
+  openExternal(url: string): Promise<void>
   // 自动更新
   checkForUpdate(): Promise<{ ok?: boolean; error?: string }>
   downloadUpdate(): Promise<{ ok?: boolean; error?: string }>

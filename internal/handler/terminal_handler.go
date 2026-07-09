@@ -5,17 +5,52 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
+	"net"
 	"net/http"
 	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
+	"github.com/linux-deploy-manager/internal/model"
+	"github.com/linux-deploy-manager/internal/remote/localshell"
 	"github.com/linux-deploy-manager/internal/remote/sshclient"
 	"github.com/linux-deploy-manager/internal/repository"
 	"github.com/linux-deploy-manager/internal/service"
 	"github.com/linux-deploy-manager/internal/terminal"
 )
+
+// isLoopback 判断host是否为本地回环地址
+func isLoopback(host string) bool {
+	if host == "localhost" || host == "127.0.0.1" || host == "::1" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	if ip != nil && ip.IsLoopback() {
+		return true
+	}
+	return false
+}
+
+// openShell 根据节点信息打开终端 shell（本机用本地 shell，远程用 SSH）
+func (h *TerminalHandler) openShell(node *model.ServerNode) (terminal.Shell, error) {
+	// 本机终端直接用本地 shell 进程
+	if isLoopback(node.Host) {
+		slog.Info("opening local shell", "node", node.Name, "host", node.Host)
+		return localshell.New()
+	}
+	// 远程节点走 SSH
+	sshClient, err := sshclient.NewClientFromNode(node, h.keyRepo)
+	if err != nil {
+		return nil, fmt.Errorf("SSH 连接失败: %w", err)
+	}
+	shell, err := sshClient.OpenShell()
+	if err != nil {
+		sshClient.Close()
+		return nil, fmt.Errorf("Shell 启动失败: %w", err)
+	}
+	return shell, nil
+}
 
 // TerminalMessage WebSocket 终端消息协议
 type TerminalMessage struct {
@@ -108,30 +143,27 @@ func (h *TerminalHandler) Handle(c *gin.Context) {
 		return
 	}
 
-	// 创建 SSH 连接
-	sshClient, err := sshclient.NewClientFromNode(node, h.keyRepo)
+	// 创建 Shell（本机用本地进程，远程用 SSH）
+	shell, err := h.openShell(node)
 	if err != nil {
-		ws.WriteJSON(gin.H{"type": "error", "message": fmt.Sprintf("SSH 连接失败: %s", err.Error())})
+		ws.WriteJSON(gin.H{"type": "error", "message": err.Error()})
 		ws.Close()
 		return
 	}
-	defer sshClient.Close()
-
-	// 打开交互式 Shell
-	shell, err := sshClient.OpenShell()
-	if err != nil {
-		ws.WriteJSON(gin.H{"type": "error", "message": fmt.Sprintf("Shell 启动失败: %s", err.Error())})
-		ws.Close()
-		return
-	}
+	defer shell.Close()
 
 	// 注册会话
 	sessionID := terminal.GenerateID(uint(nodeID))
 	h.termManager.Register(sessionID, uint(nodeID), node.Name, node.User, node.Host, shell)
 	defer h.termManager.Unregister(sessionID)
 
-	// 发送会话 ID
-	ws.WriteJSON(gin.H{"type": "info", "session_id": sessionID, "message": "终端连接已建立"})
+	// 发送会话 ID 和节点信息
+	ws.WriteJSON(gin.H{
+		"type":       "info",
+		"session_id": sessionID,
+		"node_name":  node.Name,
+		"message":    "终端连接已建立",
+	})
 
 	// 管道：WebSocket ← SSH stdout
 	errChan := make(chan error, 2)
@@ -174,9 +206,11 @@ func (h *TerminalHandler) Handle(c *gin.Context) {
 	}()
 
 	// 管道：WebSocket → SSH stdin（接收前端输入 + resize）
-	ws.SetReadDeadline(time.Time{})
+	// 设置 60s 读超时，前端每 30s 发一次 ping，允许一次丢失
+	const pongWait = 60 * time.Second
+	ws.SetReadDeadline(time.Now().Add(pongWait))
 	ws.SetPongHandler(func(string) error {
-		ws.SetReadDeadline(time.Time{})
+		ws.SetReadDeadline(time.Now().Add(pongWait))
 		return nil
 	})
 

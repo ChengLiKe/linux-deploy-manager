@@ -101,6 +101,8 @@ func main() {
 
 	// 终端 handler（供路由注册使用）
 	termHandler := handler.NewTerminalHandler(svc, termManager, repo.ServerNode, repo.Key, allowedOrigins)
+	// 本地终端 handler
+	localTermHandler := handler.NewLocalTerminalHandler(authService, allowedOrigins)
 
 	// 同步当前用户的系统 SSH 密钥
 	if err := svc.Key.SyncSystemKeys(); err != nil {
@@ -158,6 +160,7 @@ func main() {
 			authorized.DELETE("/server-nodes/:id", serverNodeHandler.Delete)
 			authorized.POST("/server-nodes/:id/test", serverNodeHandler.Test)
 			authorized.POST("/server-nodes/:id/distribute-key", serverNodeHandler.DistributeKey)
+			authorized.POST("/server-nodes/:id/list-dir", serverNodeHandler.ListRemoteDir)
 
 			// 服务器网址管理
 			serverURLHandler := handler.NewServerURLHandler(repo.ServerURL)
@@ -218,6 +221,7 @@ func main() {
 	r.GET("/ws/deploy/:task_id", wsManager.Handle)
 	r.GET("/ws/instance-logs/:project_id", handler.NewInstanceLogHandler(svc, authService, allowedOrigins).Handle)
 	r.GET("/ws/terminal/:node_id", termHandler.Handle)
+	r.GET("/ws/terminal/local", localTermHandler.Handle)
 
 	// 静态文件服务
 	staticFS, err := fs.Sub(webFS, "web/dist")

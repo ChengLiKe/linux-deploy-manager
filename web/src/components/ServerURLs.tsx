@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { Globe, Plus, ExternalLink, Edit3, Trash2, X, Check, FolderOpen, ChevronDown, ChevronRight, AlertTriangle } from 'lucide-react'
 import { urlApi } from '../utils/api'
 
@@ -18,7 +17,6 @@ interface Props {
 }
 
 export default function ServerURLs({ nodeId }: Props) {
-  const navigate = useNavigate()
   const [urls, setUrls] = useState<ServerURL[]>([])
   const [groups, setGroups] = useState<string[]>([])
   const [loading, setLoading] = useState(false)
@@ -153,8 +151,12 @@ export default function ServerURLs({ nodeId }: Props) {
     })
   }
 
-  const openBrowser = (url: string, name: string) => {
-    navigate(`/server-nodes/${nodeId}/browser?url=${encodeURIComponent(url)}&name=${encodeURIComponent(name)}`)
+  const openInBrowser = (url: string) => {
+    if (window.electronAPI?.openExternal) {
+      window.electronAPI.openExternal(url)
+    } else {
+      window.open(url, '_blank')
+    }
   }
 
   return (
@@ -175,7 +177,7 @@ export default function ServerURLs({ nodeId }: Props) {
         >
           {collapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
           <Globe size={15} className="text-slate-400" />
-          服务网址
+          网址管理
           {urls.length > 0 && (
             <span className="text-xs text-slate-400 font-normal">({urls.length})</span>
           )}
@@ -331,9 +333,9 @@ export default function ServerURLs({ nodeId }: Props) {
                             {/* 操作按钮 — 始终显示 */}
                             <div className="flex items-center gap-1 shrink-0">
                               <button
-                                onClick={() => openBrowser(u.url, u.name)}
+                                onClick={() => openInBrowser(u.url)}
                                 className="p-1.5 text-amber-600 hover:bg-amber-50 rounded-md transition-colors"
-                                title="在内部浏览器打开"
+                                title="在默认浏览器打开"
                               >
                                 <ExternalLink size={14} />
                               </button>

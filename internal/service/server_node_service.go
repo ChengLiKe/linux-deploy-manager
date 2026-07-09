@@ -138,7 +138,7 @@ func (s *ServerNodeService) TestConnection(id uint) (*model.ServerNode, error) {
 		return nil, err
 	}
 
-	client, err := s.createSSHClient(node)
+	client, err := s.CreateSSHClient(node)
 	if err != nil {
 		node.Status = "offline"
 		now := time.Now()
@@ -200,7 +200,7 @@ func (s *ServerNodeService) DistributeKey(id uint, req *DistributeKeyRequest) er
 		return fmt.Errorf("read public key: %w", err)
 	}
 
-	client, err := s.createSSHClient(node)
+	client, err := s.CreateSSHClient(node)
 	if err != nil {
 		return fmt.Errorf("ssh connect: %w", err)
 	}
@@ -250,8 +250,8 @@ func sanitizeKeyName(name string) string {
 	return replacer.Replace(name)
 }
 
-// createSSHClient 创建 SSH 客户端
-func (s *ServerNodeService) createSSHClient(node *model.ServerNode) (*sshclient.Client, error) {
+// CreateSSHClient 创建 SSH 客户端（公开方法，供 handler 层使用）
+func (s *ServerNodeService) CreateSSHClient(node *model.ServerNode) (*sshclient.Client, error) {
 	return sshclient.NewClientFromNode(node, s.keyRepo)
 }
 

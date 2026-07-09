@@ -12,6 +12,9 @@ import (
 	"golang.org/x/crypto/ssh"
 )
 
+// 包级别 HostKeyCallback，MVP 阶段跳过 host key 校验
+var hostKeyCallback = ssh.InsecureIgnoreHostKey()
+
 // Client 封装一个 SSH 客户端连接
 type Client struct {
 	client *ssh.Client
@@ -32,7 +35,7 @@ func NewClientWithKey(host string, port int, user string, privateKey []byte) (*C
 	config := &ssh.ClientConfig{
 		User:            user,
 		Auth:            []ssh.AuthMethod{ssh.PublicKeys(signer)},
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(), // MVP 阶段，后续支持 known_hosts
+		HostKeyCallback: hostKeyCallback,
 		Timeout:         10 * time.Second,
 	}
 
@@ -44,7 +47,7 @@ func NewClientWithPassword(host string, port int, user, password string) (*Clien
 	config := &ssh.ClientConfig{
 		User:            user,
 		Auth:            []ssh.AuthMethod{ssh.Password(password)},
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(), // MVP 阶段，后续支持 known_hosts
+		HostKeyCallback: hostKeyCallback,
 		Timeout:         10 * time.Second,
 	}
 

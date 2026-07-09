@@ -2,26 +2,34 @@ package terminal
 
 import (
 	"fmt"
+	"io"
 	"sync"
 	"time"
-
-	"github.com/linux-deploy-manager/internal/remote/sshclient"
 )
+
+// Shell 抽象接口，支持 SSH ShellSession 和本地 Shell
+type Shell interface {
+	Stdin() io.WriteCloser
+	Stdout() io.Reader
+	Stderr() io.Reader
+	Resize(rows, cols int) error
+	Close() error
+}
 
 // Session 表示一个活跃的终端会话
 type Session struct {
-	ID        string           `json:"id"`
-	NodeID    uint             `json:"node_id"`
-	NodeName  string           `json:"node_name"`
-	User      string           `json:"user"`
-	Host      string           `json:"host"`
-	CreatedAt time.Time        `json:"created_at"`
-	shell     *sshclient.ShellSession
+	ID        string    `json:"id"`
+	NodeID    uint      `json:"node_id"`
+	NodeName  string    `json:"node_name"`
+	User      string    `json:"user"`
+	Host      string    `json:"host"`
+	CreatedAt time.Time `json:"created_at"`
+	shell     Shell
 	cancel    chan struct{}
 }
 
 // Manager 终端会话管理器
-// 跟踪所有活跃的 SSH 终端连接
+// 跟踪所有活跃的终端连接
 type Manager struct {
 	mu       sync.RWMutex
 	sessions map[string]*Session
@@ -35,7 +43,7 @@ func NewManager() *Manager {
 }
 
 // Register 注册新会话
-func (m *Manager) Register(id string, nodeID uint, nodeName, user, host string, shell *sshclient.ShellSession) *Session {
+func (m *Manager) Register(id string, nodeID uint, nodeName, user, host string, shell Shell) *Session {
 	s := &Session{
 		ID:        id,
 		NodeID:    nodeID,
@@ -105,12 +113,29 @@ func (s *Session) CancelChan() <-chan struct{} {
 	return s.cancel
 }
 
-// Shell 返回 ShellSession（注意并发安全由调用方保证）
-func (s *Session) Shell() *sshclient.ShellSession {
+// Shell 返回 Shell 实例（注意并发安全由调用方保证）
+func (s *Session) Shell() Shell {
 	return s.shell
 }
 
-// GenerateID 生成会话 ID
+// GenerateID 生成唯一会话 ID
+// 使用原子计数器保证并发安全，时间戳+序列号双重保障唯一性
+var (
+	idGenMu      sync.Mutex
+	idGenLastNano int64
+	idGenSeq     uint64
+)
+
 func GenerateID(nodeID uint) string {
-	return fmt.Sprintf("term_%d_%d", nodeID, time.Now().UnixNano())
+	idGenMu.Lock()
+	defer idGenMu.Unlock()
+
+	now := time.Now().UnixNano()
+	if now == idGenLastNano {
+		idGenSeq++
+	} else {
+		idGenSeq = 0
+		idGenLastNano = now
+	}
+	return fmt.Sprintf("term_%d_%d_%d", nodeID, now, idGenSeq)
 }
