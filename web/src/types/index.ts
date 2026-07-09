@@ -103,6 +103,11 @@ export interface APIResponse<T> {
 export interface ElectronAPI {
   getBackendPort(): Promise<number>
   isDev: boolean
+  // 关闭行为
+  setCloseBehavior(behavior: 'quit' | 'minimize'): Promise<void>
+  getCloseBehavior(): Promise<string>
+  // 窗口管理
+  showMainWindow(): Promise<void>
   // 自动更新
   checkForUpdate(): Promise<{ ok?: boolean; error?: string }>
   downloadUpdate(): Promise<{ ok?: boolean; error?: string }>

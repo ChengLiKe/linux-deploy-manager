@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { authApi, settingsApi, systemApi } from '@/utils/api'
-import { RefreshCw } from 'lucide-react'
+import { RefreshCw, Monitor, MinusCircle, LogOut } from 'lucide-react'
 
 export default function Settings() {
   const [oldPassword, setOldPassword] = useState('')
@@ -13,24 +13,42 @@ export default function Settings() {
   const [error, setError] = useState('')
   const [appVersion, setAppVersion] = useState('')
   const [checkingUpdate, setCheckingUpdate] = useState(false)
+  const [closeBehavior, setCloseBehavior] = useState<'quit' | 'minimize'>('quit')
 
   useEffect(() => {
     Promise.all([
       settingsApi.get('sudo_enabled'),
       settingsApi.get('sudo_password'),
+      settingsApi.get('close_behavior'),
       systemApi.version().catch(() => ({ data: { data: { version: 'unknown' } } })),
     ])
-      .then(([enabledRes, pwRes, versionRes]) => {
+      .then(([enabledRes, pwRes, closeRes, versionRes]) => {
         setSudoEnabled(enabledRes.data.data?.value === 'true')
         const value = pwRes.data.data?.value || ''
         setSudoPassword(value)
         setSudoSaved(!!value)
+        const closeVal = closeRes.data.data?.value || 'quit'
+        setCloseBehavior(closeVal === 'minimize' ? 'minimize' : 'quit')
         setAppVersion(versionRes.data.data?.version || versionRes.data?.version || '')
       })
       .catch(() => {
         setSudoSaved(false)
       })
   }, [])
+
+  const handleCloseBehaviorChange = async (value: 'quit' | 'minimize') => {
+    setCloseBehavior(value)
+    try {
+      await settingsApi.set('close_behavior', value)
+      // 同步到 Electron 主进程
+      if (window.electronAPI?.setCloseBehavior) {
+        await window.electronAPI.setCloseBehavior(value)
+      }
+      setMessage('关闭行为设置已保存')
+    } catch (err: any) {
+      setError(err.response?.data?.message || '保存设置失败')
+    }
+  }
 
   const handleCheckUpdate = async () => {
     if (!window.electronAPI) return
@@ -168,6 +186,54 @@ export default function Settings() {
           {sudoSaved && <p className="text-xs text-green-600">已配置</p>}
         </div>
       </div>
+
+      {/* Electron 关闭行为设置 */}
+      {window.electronAPI && (
+        <div className="bg-white rounded-xl border border-slate-200 p-6">
+          <h3 className="text-lg font-semibold text-slate-800 mb-4">关闭行为</h3>
+          <p className="text-sm text-slate-500 mb-4">设置点击关闭按钮时的行为</p>
+          <div className="flex gap-3 max-w-md">
+            <button
+              onClick={() => handleCloseBehaviorChange('quit')}
+              className={`flex-1 p-4 text-sm border-2 rounded-xl text-left transition-all ${
+                closeBehavior === 'quit'
+                  ? 'border-amber-500 bg-amber-50/50 shadow-sm'
+                  : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+              }`}
+            >
+              <div className="flex items-center gap-2 mb-1">
+                <LogOut size={16} className={closeBehavior === 'quit' ? 'text-amber-600' : 'text-slate-400'} />
+                <span className="font-semibold text-slate-800">直接关闭</span>
+              </div>
+              <p className="text-xs text-slate-500 ml-7">完全退出程序</p>
+            </button>
+            <button
+              onClick={() => handleCloseBehaviorChange('minimize')}
+              className={`flex-1 p-4 text-sm border-2 rounded-xl text-left transition-all ${
+                closeBehavior === 'minimize'
+                  ? 'border-amber-500 bg-amber-50/50 shadow-sm'
+                  : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+              }`}
+            >
+              <div className="flex items-center gap-2 mb-1">
+                <MinusCircle size={16} className={closeBehavior === 'minimize' ? 'text-amber-600' : 'text-slate-400'} />
+                <span className="font-semibold text-slate-800">最小化到托盘</span>
+              </div>
+              <p className="text-xs text-slate-500 ml-7">在系统托盘继续运行</p>
+            </button>
+          </div>
+          {closeBehavior === 'minimize' && (
+            <div className="mt-3 p-3 bg-slate-50 rounded-lg border border-slate-100">
+              <div className="flex items-start gap-2 text-xs text-slate-600">
+                <Monitor size={14} className="mt-0.5 shrink-0 text-slate-400" />
+                <div>
+                  最小化后可从系统托盘图标右键菜单选择「打开主界面」或「彻底退出」。
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="bg-white rounded-xl border border-slate-200 p-6">
         <h3 className="text-lg font-semibold text-slate-800 mb-4">系统信息</h3>

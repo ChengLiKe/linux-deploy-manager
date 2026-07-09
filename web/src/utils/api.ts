@@ -133,3 +133,15 @@ export const settingsApi = {
 export const systemApi = {
   version: () => api.get('/version'),
 }
+
+export const terminalApi = {
+  list: () => api.get('/terminal/sessions'),
+  disconnect: (sessionId: string) => api.delete(`/terminal/sessions/${sessionId}`),
+}
+
+export const urlApi = {
+  list: (nodeId: number) => api.get(`/server-nodes/${nodeId}/urls`),
+  create: (data: Record<string, unknown>) => api.post('/server-urls', data),
+  update: (id: number, data: Record<string, unknown>) => api.put(`/server-urls/${id}`, data),
+  delete: (id: number) => api.delete(`/server-urls/${id}`),
+}

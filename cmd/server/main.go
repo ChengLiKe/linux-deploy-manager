@@ -24,6 +24,7 @@ import (
 	"github.com/linux-deploy-manager/internal/remote/sshclient"
 	"github.com/linux-deploy-manager/internal/repository"
 	"github.com/linux-deploy-manager/internal/service"
+	"github.com/linux-deploy-manager/internal/terminal"
 	"github.com/linux-deploy-manager/internal/websocket"
 )
 
@@ -92,8 +93,14 @@ func main() {
 		return buf
 	})
 
+	// 初始化终端管理器
+	termManager := terminal.NewManager()
+
 	// 初始化服务层
 	svc := service.New(repo, authService, filepath.Join(cfg.DataDir, "keys"), cfg.LogDir, deployerEngine, sshPool)
+
+	// 终端 handler（供路由注册使用）
+	termHandler := handler.NewTerminalHandler(svc, termManager, repo.ServerNode, repo.Key, allowedOrigins)
 
 	// 同步当前用户的系统 SSH 密钥
 	if err := svc.Key.SyncSystemKeys(); err != nil {
@@ -152,6 +159,13 @@ func main() {
 			authorized.POST("/server-nodes/:id/test", serverNodeHandler.Test)
 			authorized.POST("/server-nodes/:id/distribute-key", serverNodeHandler.DistributeKey)
 
+			// 服务器网址管理
+			serverURLHandler := handler.NewServerURLHandler(repo.ServerURL)
+			authorized.GET("/server-nodes/:node_id/urls", serverURLHandler.List)
+			authorized.POST("/server-urls", serverURLHandler.Create)
+			authorized.PUT("/server-urls/:id", serverURLHandler.Update)
+			authorized.DELETE("/server-urls/:id", serverURLHandler.Delete)
+
 			fixHandler := handler.NewFixHandler(svc)
 			authorized.POST("/auto-fix", fixHandler.AutoFix)
 
@@ -193,12 +207,17 @@ func main() {
 			authorized.GET("/settings", settingHandler.Get)
 			authorized.PUT("/settings", settingHandler.Set)
 			authorized.POST("/settings", settingHandler.Set)
+
+			// 终端管理 API
+			authorized.GET("/terminal/sessions", termHandler.ListSessions)
+			authorized.DELETE("/terminal/sessions/:session_id", termHandler.DisconnectSession)
 		}
 	}
 
 	// WebSocket 路由
 	r.GET("/ws/deploy/:task_id", wsManager.Handle)
 	r.GET("/ws/instance-logs/:project_id", handler.NewInstanceLogHandler(svc, authService, allowedOrigins).Handle)
+	r.GET("/ws/terminal/:node_id", termHandler.Handle)
 
 	// 静态文件服务
 	staticFS, err := fs.Sub(webFS, "web/dist")

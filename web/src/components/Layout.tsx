@@ -1,6 +1,6 @@
 import { Link, useLocation, useNavigate, Outlet } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
-import { LogOut, Key, LayoutTemplate, Home, Settings, Server } from 'lucide-react'
+import { LogOut, Key, LayoutTemplate, Home, Settings, Server, Terminal } from 'lucide-react'
 import { useEffect } from 'react'
 import UpdateNotification from '@/components/UpdateNotification'
 
@@ -8,6 +8,7 @@ const navItems = [
   { path: '/', label: '仪表盘', icon: Home },
   { path: '/projects', label: '项目', icon: LayoutTemplate },
   { path: '/server-nodes', label: '服务器', icon: Server },
+  { path: '/terminal', label: '终端', icon: Terminal },
   { path: '/keys', label: '密钥', icon: Key },
   { path: '/settings', label: '设置', icon: Settings },
 ]

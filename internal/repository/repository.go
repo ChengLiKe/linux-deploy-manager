@@ -13,6 +13,7 @@ type Repositories struct {
 	Project    ProjectRepository
 	Task       TaskRepository
 	Setting    SettingRepository
+	ServerURL  ServerURLRepository
 }
 
 // New 创建所有仓库实例
@@ -23,6 +24,7 @@ func New(db *gorm.DB) *Repositories {
 		Project:    &projectRepo{db: db},
 		Task:       &taskRepo{db: db},
 		Setting:    &settingRepo{db: db},
+		ServerURL:  &serverURLRepo{db: db},
 	}
 }
 
@@ -255,4 +257,54 @@ func (r *settingRepo) Set(key, value string) error {
 	}
 	s.Value = value
 	return r.db.Save(&s).Error
+}
+
+// ── ServerURL ─────────────────────────────────────
+
+// ServerURLRepository 服务器网址仓库接口
+type ServerURLRepository interface {
+	List(nodeID uint) ([]model.ServerURL, error)
+	Get(id uint) (*model.ServerURL, error)
+	Create(url *model.ServerURL) error
+	Update(url *model.ServerURL) error
+	Delete(id uint) error
+	ListGroups(nodeID uint) ([]string, error)
+}
+
+type serverURLRepo struct {
+	db *gorm.DB
+}
+
+func (r *serverURLRepo) List(nodeID uint) ([]model.ServerURL, error) {
+	var urls []model.ServerURL
+	err := r.db.Where("node_id = ?", nodeID).Order("sort_order ASC, id ASC").Find(&urls).Error
+	return urls, err
+}
+
+func (r *serverURLRepo) Get(id uint) (*model.ServerURL, error) {
+	var u model.ServerURL
+	err := r.db.First(&u, id).Error
+	if err != nil {
+		return nil, err
+	}
+	return &u, nil
+}
+
+func (r *serverURLRepo) Create(u *model.ServerURL) error {
+	return r.db.Create(u).Error
+}
+
+func (r *serverURLRepo) Update(u *model.ServerURL) error {
+	return r.db.Save(u).Error
+}
+
+func (r *serverURLRepo) Delete(id uint) error {
+	return r.db.Delete(&model.ServerURL{}, id).Error
+}
+
+func (r *serverURLRepo) ListGroups(nodeID uint) ([]string, error) {
+	var groups []string
+	err := r.db.Model(&model.ServerURL{}).Where("node_id = ?", nodeID).
+		Select("DISTINCT `group`").Order("`group` ASC").Pluck("`group`", &groups).Error
+	return groups, err
 }

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog, Menu } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Menu, Tray, nativeImage } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
 const fs = require('fs');
@@ -52,6 +52,7 @@ function waitForPortFile(portFile, timeout = 30000) {
 let goProcess = null;
 let backendPort = null;
 let mainWindow = null;
+let tray = null;
 
 // ── 自动更新事件 ────────────────────────────────────
 function setupAutoUpdater() {
@@ -234,6 +235,69 @@ function setupMenu() {
   }
 }
 
+// ── 系统托盘 ─────────────────────────────────────
+function createTray() {
+  const iconPath = path.join(__dirname, 'assets', 'icon.png');
+  let trayIcon;
+  try {
+    trayIcon = nativeImage.createFromPath(iconPath).resize({ width: 16, height: 16 });
+  } catch (e) {
+    // 图标加载失败时使用空图标（不阻塞应用）
+    return;
+  }
+
+  tray = new Tray(trayIcon);
+  tray.setToolTip('Linux Deploy Manager');
+
+  const contextMenu = Menu.buildFromTemplate([
+    {
+      label: '打开主界面',
+      click: () => {
+        if (mainWindow) {
+          mainWindow.show();
+          mainWindow.focus();
+        }
+      },
+    },
+    { type: 'separator' },
+    {
+      label: '彻底退出',
+      click: () => {
+        app.isQuitting = true;
+        app.quit();
+      },
+    },
+  ]);
+
+  tray.setContextMenu(contextMenu);
+  tray.on('double-click', () => {
+    if (mainWindow) {
+      mainWindow.show();
+      mainWindow.focus();
+    }
+  });
+}
+
+function destroyTray() {
+  if (tray) {
+    tray.destroy();
+    tray = null;
+  }
+}
+
+// ── 获取关闭行为设置 ─────────────────────────────
+function getCloseBehaviorSetting() {
+  try {
+    const userDataPath = app.getPath('userData');
+    const dbPath = path.join(userDataPath, 'db.sqlite');
+    if (!fs.existsSync(dbPath)) return 'quit';
+    // 通过 Go 后端 API 读取，这里作为后备从进程启动参数获取
+    return 'quit';
+  } catch (e) {
+    return 'quit';
+  }
+}
+
 // ── 创建窗口 ──────────────────────────────────────
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -256,10 +320,46 @@ function createWindow() {
     mainWindow.loadURL(`http://127.0.0.1:${backendPort}`);
   }
 
+  // 拦截关闭事件
+  mainWindow.on('close', (event) => {
+    // 如果是通过 app.quit() 触发的（托盘"彻底退出"），则真正退出
+    if (app.isQuitting) {
+      return;
+    }
+
+    // 通过 IPC 读取关闭行为设置
+    const closeBehavior = global.closeBehavior || 'quit';
+
+    if (closeBehavior === 'minimize') {
+      event.preventDefault();
+      mainWindow.hide();
+      createTray();
+    }
+    // closeBehavior === 'quit' 则直接关闭
+  });
+
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
 }
+
+// ── IPC 处理器 ────────────────────────────────────
+ipcMain.handle('get-backend-port', () => backendPort);
+
+ipcMain.handle('set-close-behavior', (_event, behavior) => {
+  global.closeBehavior = behavior;
+});
+
+ipcMain.handle('get-close-behavior', () => {
+  return global.closeBehavior || 'quit';
+});
+
+ipcMain.handle('show-main-window', () => {
+  if (mainWindow) {
+    mainWindow.show();
+    mainWindow.focus();
+  }
+});
 
 // ── 应用生命周期 ────────────────────────────────────
 const gotTheLock = app.requestSingleInstanceLock();
@@ -288,6 +388,10 @@ app.on('second-instance', () => {
 });
 
 app.on('window-all-closed', () => {
+  // 有托盘时，窗口关闭不退出应用
+  if (tray) {
+    return;
+  }
   if (goProcess) {
     goProcess.kill();
     goProcess = null;
@@ -298,6 +402,8 @@ app.on('window-all-closed', () => {
 });
 
 app.on('before-quit', () => {
+  app.isQuitting = true;
+  destroyTray();
   if (goProcess) {
     goProcess.kill();
     goProcess = null;

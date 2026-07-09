@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 )
 
 const (
@@ -21,13 +22,17 @@ const (
 var masterKey []byte
 var masterKeySet bool // 标记密钥已初始化，避免多次清零
 
-// WipeKey 清空内存中的加密密钥，防止进程 core dump 泄露
+// WipeKey 清空内存中的加密密钥，并删除持久化文件
 // 通常放在进程退出前或密钥轮换时调用
 func WipeKey() {
 	if masterKeySet {
 		clear(masterKey)
 		masterKey = nil
 		masterKeySet = false
+	}
+	// 删除持久化密钥文件
+	if fp, err := keyFilePath(); err == nil {
+		os.Remove(fp) // 忽略错误，文件可能不存在
 	}
 }
 
@@ -36,6 +41,7 @@ func getMasterKey() ([]byte, error) {
 		return masterKey, nil
 	}
 
+	// 1. 环境变量优先（用户显式设置）
 	keyHex := os.Getenv(envKeyName)
 	if keyHex != "" {
 		key, err := hex.DecodeString(keyHex)
@@ -50,14 +56,68 @@ func getMasterKey() ([]byte, error) {
 		return masterKey, nil
 	}
 
-	// 自动生成密钥（仅内存，重启后失效）
+	// 2. 持久化的密钥文件（重启后保持一致性）
+	if stored := loadKeyFromFile(); stored != nil {
+		masterKey = stored
+		masterKeySet = true
+		return masterKey, nil
+	}
+
+	// 3. 自动生成密钥并持久化到文件
 	key := make([]byte, keyLen)
 	if _, err := rand.Read(key); err != nil {
 		return nil, fmt.Errorf("generate key: %w", err)
 	}
 	masterKey = key
 	masterKeySet = true
+
+	if saveErr := saveKeyToFile(key); saveErr != nil {
+		return nil, fmt.Errorf("key generated but persist failed: %w", saveErr)
+	}
+
 	return masterKey, nil
+}
+
+// keyFilePath 返回加密密钥持久化文件路径
+func keyFilePath() (string, error) {
+	configDir, err := os.UserConfigDir()
+	if err != nil {
+		return "", fmt.Errorf("get config dir: %w", err)
+	}
+	appDir := filepath.Join(configDir, "linux-deploy-manager")
+	if err := os.MkdirAll(appDir, 0700); err != nil {
+		return "", fmt.Errorf("create config dir: %w", err)
+	}
+	return filepath.Join(appDir, ".encryption_key"), nil
+}
+
+// saveKeyToFile 将密钥写入文件
+func saveKeyToFile(key []byte) error {
+	fp, err := keyFilePath()
+	if err != nil {
+		return err
+	}
+	// 检查是否已存在有效密钥文件
+	if existing, readErr := os.ReadFile(fp); readErr == nil && len(existing) == keyLen {
+		return nil // 已存在，不做覆盖
+	}
+	return os.WriteFile(fp, key, 0600)
+}
+
+// loadKeyFromFile 从文件加载持久化的密钥
+func loadKeyFromFile() []byte {
+	fp, err := keyFilePath()
+	if err != nil {
+		return nil
+	}
+	data, err := os.ReadFile(fp)
+	if err != nil {
+		return nil
+	}
+	if len(data) != keyLen {
+		return nil
+	}
+	return data
 }
 
 // Encrypt 使用 AES-256-GCM 加密明文

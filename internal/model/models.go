@@ -113,3 +113,16 @@ type NodeInitLog struct {
 	StartedAt time.Time  `json:"started_at"`
 	EndedAt   *time.Time `json:"ended_at"`
 }
+
+// ServerURL 服务器节点关联的网址记录
+type ServerURL struct {
+	ID          uint       `gorm:"primaryKey" json:"id"`
+	NodeID      uint       `gorm:"not null;index" json:"node_id"`
+	Name        string     `gorm:"size:100;not null" json:"name"`
+	URL         string     `gorm:"size:2048;not null" json:"url"`
+	Group       string     `gorm:"size:50;default:'default'" json:"group"`
+	Description string     `gorm:"size:500" json:"description"`
+	SortOrder   int        `gorm:"default:0" json:"sort_order"`
+	CreatedAt   time.Time  `json:"created_at"`
+	UpdatedAt   time.Time  `json:"updated_at"`
+}

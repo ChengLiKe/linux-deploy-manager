@@ -17,16 +17,18 @@ func NewSettingService(repo repository.SettingRepository) *SettingService {
 }
 
 const (
-	SettingKeySudoPassword = "sudo_password"
-	SettingKeySudoEnabled  = "sudo_enabled"
-	SettingKeyTheme        = "theme"
+	SettingKeySudoPassword  = "sudo_password"
+	SettingKeySudoEnabled   = "sudo_enabled"
+	SettingKeyTheme         = "theme"
+	SettingKeyCloseBehavior = "close_behavior"
 )
 
 // allowedSettingKeys 允许通过 API 设置的白名单 key
 var allowedSettingKeys = map[string]bool{
-	SettingKeySudoPassword: true,
-	SettingKeySudoEnabled:  true,
-	SettingKeyTheme:        true,
+	SettingKeySudoPassword:  true,
+	SettingKeySudoEnabled:   true,
+	SettingKeyTheme:         true,
+	SettingKeyCloseBehavior: true,
 }
 
 // Get 获取配置值

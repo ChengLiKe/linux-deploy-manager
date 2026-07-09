@@ -1,8 +1,10 @@
 import { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { serverNodeApi, keyApi } from '@/utils/api'
 import type { ServerNode } from '@/types'
-import { Plus, Server, Trash2, RefreshCw, Edit3, Key, X, Activity } from 'lucide-react'
+import { Plus, Server, Trash2, RefreshCw, Edit3, Key, X, Activity, Terminal } from 'lucide-react'
 import DiagnoseModal from '@/components/DiagnoseModal'
+import ServerURLs from '@/components/ServerURLs'
 
 interface ServerKey {
   id: number
@@ -10,6 +12,7 @@ interface ServerKey {
 }
 
 export default function ServerNodeList() {
+  const navigate = useNavigate()
   const [nodes, setNodes] = useState<ServerNode[]>([])
   const [loading, setLoading] = useState(false)
   const [testingId, setTestingId] = useState<number | null>(null)
@@ -244,6 +247,14 @@ export default function ServerNodeList() {
                     诊断
                   </button>
                   <button
+                    onClick={() => navigate(`/server-nodes/${node.id}/terminal`)}
+                    className="flex items-center gap-1 px-2.5 py-1.5 text-sm rounded-lg border border-slate-200 hover:bg-green-50 transition-colors text-green-700 border-green-200"
+                    title="SSH 终端"
+                  >
+                    <Terminal size={14} />
+                    终端
+                  </button>
+                  <button
                     onClick={() => { setShowDistribute(node.id); setDistributeKeyId(0) }}
                     className="flex items-center gap-1 px-2.5 py-1.5 text-sm rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors"
                     title="下发密钥"
@@ -297,6 +308,9 @@ export default function ServerNodeList() {
                   </div>
                 </div>
               )}
+
+              {/* 服务网址 */}
+              <ServerURLs nodeId={node.id} />
             </div>
           ))}
         </div>

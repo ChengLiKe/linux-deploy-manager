@@ -11,6 +11,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
   /** 是否为开发模式 */
   isDev: process.env.LDM_IS_PACKAGED !== 'true',
 
+  // ── 关闭行为 ────────────────────────────────────
+  /** 设置关闭行为 */
+  setCloseBehavior: (behavior) => ipcRenderer.invoke('set-close-behavior', behavior),
+  /** 获取关闭行为 */
+  getCloseBehavior: () => ipcRenderer.invoke('get-close-behavior'),
+
+  // ── 窗口管理 ────────────────────────────────────
+  /** 显示主窗口 */
+  showMainWindow: () => ipcRenderer.invoke('show-main-window'),
+
   // ── 自动更新 API ────────────────────────────────
   /** 手动检查更新 */
   checkForUpdate: () => ipcRenderer.invoke('check-for-update'),
