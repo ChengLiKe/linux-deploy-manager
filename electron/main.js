@@ -53,6 +53,7 @@ let goProcess = null;
 let backendPort = null;
 let mainWindow = null;
 let tray = null;
+let goStderr = '';  // 捕获 Go 后端 stderr 用于诊断
 
 // ── 自动更新事件 ────────────────────────────────────
 function setupAutoUpdater() {
@@ -158,7 +159,13 @@ async function startBackend() {
   });
 
   goProcess.stderr?.on('data', (data) => {
-    console.error(`[Go] ${data.toString().trim()}`);
+    const text = data.toString();
+    console.error(`[Go] ${text.trim()}`);
+    goStderr += text;
+    // 只保留最近 2KB
+    if (goStderr.length > 2048) {
+      goStderr = goStderr.slice(-2048);
+    }
   });
 
   goProcess.on('exit', (code) => {
@@ -166,7 +173,13 @@ async function startBackend() {
     goProcess = null;
   });
 
-  const port = await waitForPortFile(portFile);
+  const port = await waitForPortFile(portFile).catch((err) => {
+    // 超时时附带 Go stderr 以辅助诊断
+    const stderrInfo = goStderr
+      ? `\n\nGo 后端输出:\n${goStderr.slice(-1024)}`
+      : '\n\n提示: Go 后端未产生任何输出，可能二进制文件无法运行';
+    throw new Error(err.message + stderrInfo);
+  });
   backendPort = port;
   console.log(`Go backend ready on port ${port}`);
   return port;
@@ -373,6 +386,11 @@ app.whenReady().then(async () => {
     setupAutoUpdater();
   } catch (err) {
     console.error('Failed to start application:', err);
+    const userDataPath = app.getPath('userData');
+    dialog.showErrorBox('启动失败',
+      `应用启动失败\n\n${err.message}\n\n` +
+      `请检查日志目录:\n${userDataPath}\\logs\n\n` +
+      `或删除数据目录重新初始化:\n${userDataPath}`);
     app.exit(1);
   }
 });

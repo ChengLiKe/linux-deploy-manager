@@ -161,7 +161,7 @@ func main() {
 
 			// 服务器网址管理
 			serverURLHandler := handler.NewServerURLHandler(repo.ServerURL)
-			authorized.GET("/server-nodes/:node_id/urls", serverURLHandler.List)
+			authorized.GET("/server-nodes/:id/urls", serverURLHandler.List)
 			authorized.POST("/server-urls", serverURLHandler.Create)
 			authorized.PUT("/server-urls/:id", serverURLHandler.Update)
 			authorized.DELETE("/server-urls/:id", serverURLHandler.Delete)

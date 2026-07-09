@@ -40,7 +40,7 @@ type UpdateServerURLRequest struct {
 
 // List 列出指定节点的所有网址
 func (h *ServerURLHandler) List(c *gin.Context) {
-	nodeID, err := strconv.ParseUint(c.Param("node_id"), 10, 32)
+	nodeID, err := strconv.ParseUint(c.Param("id"), 10, 32)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"code": 400080, "message": "无效的节点 ID"})
 		return
