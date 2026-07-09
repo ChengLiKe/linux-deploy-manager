@@ -190,5 +190,5 @@ func (s *FixService) setupAuthorizedKeys(client *sshclient.Client, node *model.S
 
 // createSSHClient 创建 SSH 连接
 func (s *FixService) createSSHClient(node *model.ServerNode) (*sshclient.Client, error) {
-	return sshclient.NewClientFromNode(node, node.Password, s.keyRepo)
+	return sshclient.NewClientFromNode(node, s.keyRepo)
 }

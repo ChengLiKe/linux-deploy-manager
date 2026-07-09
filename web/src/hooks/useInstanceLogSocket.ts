@@ -67,7 +67,11 @@ export function useInstanceLogSocket(options: UseInstanceLogSocketOptions) {
 
     setConnectionStatus(reconnectCount.current > 0 ? 'reconnecting' : 'connecting')
 
-    const ws = new WebSocket(wsUrl)
+    // 附加 JWT token 进行 WebSocket 鉴权
+    const token = localStorage.getItem('token')
+    const urlWithToken = token ? `${wsUrl}${wsUrl.includes('?') ? '&' : '?'}token=${encodeURIComponent(token)}` : wsUrl
+
+    const ws = new WebSocket(urlWithToken)
     wsRef.current = ws
 
     ws.onopen = () => {

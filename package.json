@@ -1,6 +1,6 @@
 {
   "name": "linux-deploy-manager",
-  "version": "1.1.1",
+  "version": "1.1.1.1",
   "description": "Linux Deploy Manager - 多服务器部署管理桌面客户端",
   "main": "electron/main.js",
   "author": "Linux Deploy Manager Team",

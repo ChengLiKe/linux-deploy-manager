@@ -46,13 +46,17 @@ export function useWebSocket(url: string | null, options: UseWebSocketOptions = 
   const connect = useCallback(() => {
     if (!resolvedUrl) return
 
-    // 关闭已有连接，避免重复建立多个 WebSocket
+    // 关闭已有连接
     if (wsRef.current) {
       wsRef.current.close()
       wsRef.current = null
     }
 
-    const ws = new WebSocket(resolvedUrl)
+    // 附加 JWT token 进行 WebSocket 鉴权
+    const token = localStorage.getItem('token')
+    const urlWithToken = token ? `${resolvedUrl}${resolvedUrl.includes('?') ? '&' : '?'}token=${encodeURIComponent(token)}` : resolvedUrl
+
+    const ws = new WebSocket(urlWithToken)
     wsRef.current = ws
 
     ws.onopen = () => {

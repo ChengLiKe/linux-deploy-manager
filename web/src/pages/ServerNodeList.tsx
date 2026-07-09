@@ -131,14 +131,6 @@ export default function ServerNodeList() {
     }
   }
 
-  const handleInit = async (id: number) => {
-    try {
-      await serverNodeApi.init(id)
-      // 不阻塞等待，后台执行
-    } catch (err) {
-      console.error('触发初始化失败', err)
-    }
-  }
 
   const handleDelete = async (id: number) => {
     if (!confirm('确定删除该服务器节点？')) return
@@ -250,14 +242,6 @@ export default function ServerNodeList() {
                   >
                     <Activity size={14} />
                     诊断
-                  </button>
-                  <button
-                    onClick={() => handleInit(node.id)}
-                    className="flex items-center gap-1 px-2.5 py-1.5 text-sm rounded-lg border border-slate-200 hover:bg-green-50 transition-colors text-green-700 border-green-200"
-                    title="环境初始化"
-                  >
-                    <Server size={14} />
-                    初始化
                   </button>
                   <button
                     onClick={() => { setShowDistribute(node.id); setDistributeKeyId(0) }}

@@ -4,6 +4,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
+
+	gocryptoSSH "golang.org/x/crypto/ssh"
 
 	"github.com/linux-deploy-manager/internal/model"
 	"github.com/linux-deploy-manager/internal/repository"
@@ -66,7 +69,7 @@ func (s *KeyService) Create(req *CreateKeyRequest) (*model.SSHKey, error) {
 type ImportKeyRequest struct {
 	Name       string `json:"name" binding:"required,min=1,max=50"`
 	KeyType    string `json:"key_type" binding:"omitempty,oneof=git server"`
-	PublicKey  string `json:"public_key" binding:"required"`
+	PublicKey  string `json:"public_key" binding:"omitempty"`
 	PrivateKey string `json:"private_key" binding:"required"`
 	Algorithm  string `json:"algorithm" binding:"omitempty,oneof=rsa ed25519 dsa ecdsa"`
 }
@@ -78,6 +81,16 @@ func (s *KeyService) ImportKey(req *ImportKeyRequest) (*model.SSHKey, error) {
 	}
 	if req.Algorithm == "" {
 		req.Algorithm = "ed25519"
+	}
+
+	// 如果只提供了私钥 PEM，自动提取公钥
+	publicKey := req.PublicKey
+	if publicKey == "" {
+		extracted, err := extractPublicKeyFromPrivate([]byte(req.PrivateKey))
+		if err != nil {
+			return nil, fmt.Errorf("私钥中提取公钥失败（可手动粘贴公钥）: %w", err)
+		}
+		publicKey = extracted
 	}
 
 	// 检查名称是否已存在
@@ -99,7 +112,7 @@ func (s *KeyService) ImportKey(req *ImportKeyRequest) (*model.SSHKey, error) {
 
 	// 写入公钥文件
 	publicPath := filepath.Join(keyDir, "public")
-	if err := os.WriteFile(publicPath, []byte(req.PublicKey), 0644); err != nil {
+	if err := os.WriteFile(publicPath, []byte(publicKey), 0644); err != nil {
 		os.RemoveAll(keyDir) // 回滚
 		return nil, fmt.Errorf("write public key: %w", err)
 	}
@@ -107,7 +120,7 @@ func (s *KeyService) ImportKey(req *ImportKeyRequest) (*model.SSHKey, error) {
 	key := &model.SSHKey{
 		Name:        req.Name,
 		Algorithm:   req.Algorithm,
-		PublicKey:   req.PublicKey,
+		PublicKey:   publicKey,
 		PrivatePath: privatePath,
 		Source:      "managed",
 		KeyType:     req.KeyType,
@@ -180,4 +193,17 @@ func (s *KeyService) SyncSystemKeys() error {
 
 	// 清理已不存在的系统密钥
 	return s.repo.DeleteSystemKeysNotIn(names)
+}
+
+// extractPublicKeyFromPrivate 从 PEM 私钥中提取 SSH 公钥字符串
+// 支持 RSA、ECDSA、Ed25519 等常见密钥格式
+func extractPublicKeyFromPrivate(privateKeyPEM []byte) (string, error) {
+	signer, err := gocryptoSSH.ParsePrivateKey(privateKeyPEM)
+	if err != nil {
+		return "", fmt.Errorf("parse private key: %w", err)
+	}
+
+	sshPubKey := signer.PublicKey()
+	authKeyLine := string(gocryptoSSH.MarshalAuthorizedKey(sshPubKey))
+	return strings.TrimSpace(authKeyLine), nil
 }

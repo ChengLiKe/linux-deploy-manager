@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, Menu } = require('electron');
 const path = require('path');
 const { spawn } = require('child_process');
 const fs = require('fs');
@@ -171,6 +171,69 @@ async function startBackend() {
   return port;
 }
 
+// ── 菜单栏 ─────────────────────────────────────────
+function setupMenu() {
+  const isMac = process.platform === 'darwin';
+
+  if (isMac) {
+    // macOS：保留最精简的菜单（应用名称 + 基本的 Cmd+C/V/Q 能工作）
+    // 去掉 File/Edit/View/Window/Help 等杂项，只保留 app 子菜单
+    const macTemplate = [
+      {
+        label: app.name,
+        submenu: [
+          { role: 'about' },
+          { type: 'separator' },
+          { role: 'hide', label: '隐藏' },
+          { role: 'hideOthers', label: '隐藏其他' },
+          { role: 'unhide', label: '显示全部' },
+          { type: 'separator' },
+          { role: 'quit', label: '退出' },
+        ],
+      },
+      {
+        label: 'Edit',
+        submenu: [
+          { role: 'undo', label: '撤销' },
+          { role: 'redo', label: '重做' },
+          { type: 'separator' },
+          { role: 'cut', label: '剪切' },
+          { role: 'copy', label: '复制' },
+          { role: 'paste', label: '粘贴' },
+          { role: 'selectAll', label: '全选' },
+        ],
+      },
+      {
+        label: 'View',
+        submenu: [
+          { role: 'reload', label: '重新加载' },
+          { role: 'forceReload', label: '强制重新加载' },
+          { role: 'toggleDevTools', label: '开发者工具' },
+          { type: 'separator' },
+          { role: 'resetZoom', label: '重置缩放' },
+          { role: 'zoomIn', label: '放大' },
+          { role: 'zoomOut', label: '缩小' },
+          { type: 'separator' },
+          { role: 'togglefullscreen', label: '全屏' },
+        ],
+      },
+      {
+        label: 'Window',
+        submenu: [
+          { role: 'minimize', label: '最小化' },
+          { role: 'close', label: '关闭' },
+        ],
+      },
+    ];
+    const menu = Menu.buildFromTemplate(macTemplate);
+    Menu.setApplicationMenu(menu);
+  } else {
+    // Windows / Linux：完全隐藏菜单栏
+    // 用户仍可通过 Alt 键临时呼出默认菜单（Electron 内置行为）
+    Menu.setApplicationMenu(null);
+  }
+}
+
 // ── 创建窗口 ──────────────────────────────────────
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -206,6 +269,7 @@ if (!gotTheLock) {
 
 app.whenReady().then(async () => {
   try {
+    setupMenu();
     const port = await startBackend();
     createWindow();
     setupAutoUpdater();

@@ -17,7 +17,6 @@ export default function KeyList() {
   // 生成/导入模式切换
   const [createMode, setCreateMode] = useState<'generate' | 'import'>('generate')
   // 导入模式字段
-  const [importPublicKey, setImportPublicKey] = useState('')
   const [importPrivateKey, setImportPrivateKey] = useState('')
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -51,21 +50,19 @@ export default function KeyList() {
   }
 
   const handleImport = async () => {
-    if (!newKeyName.trim() || !importPublicKey.trim() || !importPrivateKey.trim()) {
-      setError('请填写完整信息（名称、公钥、私钥）')
+    if (!newKeyName.trim() || !importPrivateKey.trim()) {
+      setError('请填写名称和私钥（PEM 文件内容）')
       return
     }
     try {
       await keyApi.import({
         name: newKeyName.trim(),
         key_type: keyType,
-        public_key: importPublicKey.trim(),
         private_key: importPrivateKey.trim(),
         algorithm,
       })
       setShowCreate(false)
       setNewKeyName('')
-      setImportPublicKey('')
       setImportPrivateKey('')
       fetchKeys()
     } catch (err: any) {
@@ -78,12 +75,7 @@ export default function KeyList() {
     if (!file) return
     const reader = new FileReader()
     reader.onload = (ev) => {
-      const content = ev.target?.result as string
-      if (file.name.includes('pub')) {
-        setImportPublicKey(content)
-      } else {
-        setImportPrivateKey(content)
-      }
+      setImportPrivateKey(ev.target?.result as string)
     }
     reader.readAsText(file)
   }
@@ -191,7 +183,7 @@ export default function KeyList() {
                 </ol>
                 <p>
                   <span className="font-semibold">导入已有密钥：</span>
-                  如果你已有一对密钥文件（从服务器或其它地方获取），可以直接粘贴公钥和私钥内容导入。
+                  如果你已有一对密钥文件，可以粘贴私钥内容导入，公钥会自动从私钥中提取。
                 </p>
                 <p className="text-xs text-amber-700">
                   部署时在模板中选择 Git 密钥，拉取代码时会通过 <code className="bg-amber-100 px-1 py-0.5 rounded">GIT_SSH_COMMAND</code> 自动使用。
@@ -214,7 +206,7 @@ export default function KeyList() {
                 </ol>
                 <p>
                   <span className="font-semibold">导入已有密钥：</span>
-                  如果你已有服务器的 SSH 密钥文件（如从其它管理员获取），可以直接粘贴公钥和私钥内容导入，无需重新生成。
+                  上传或粘贴 PEM 格式的私钥文件（如云服务器下发的 <code className="bg-amber-100 px-1 py-0.5 rounded">.pem</code> 文件），系统会自动提取对应的公钥。
                 </p>
                 <p className="text-xs text-amber-700">
                   添加「服务器节点」时，选择认证方式为"SSH 密钥"，然后从下拉列表中选择此密钥。
@@ -298,7 +290,7 @@ export default function KeyList() {
                 </div>
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <label className="block text-sm font-medium text-slate-700">私钥内容</label>
+                    <label className="block text-sm font-medium text-slate-700">私钥文件（PEM）</label>
                     <button
                       onClick={() => fileInputRef.current?.click()}
                       className="flex items-center gap-1 text-xs text-amber-600 hover:text-amber-700"
@@ -324,18 +316,6 @@ export default function KeyList() {
 &#10;-----END OPENSSH PRIVATE KEY-----"
                   />
                 </div>
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="block text-sm font-medium text-slate-700">公钥内容</label>
-                  </div>
-                  <textarea
-                    value={importPublicKey}
-                    onChange={(e) => setImportPublicKey(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 font-mono text-xs"
-                    rows={3}
-                    placeholder="ssh-ed25519 AAAAC3... user@host"
-                  />
-                </div>
               </>
             )}
 
@@ -357,7 +337,7 @@ export default function KeyList() {
               ) : (
                 <button onClick={handleImport} className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700">导入</button>
               )}
-              <button onClick={() => { setShowCreate(false); setCreateMode('generate'); setImportPublicKey(''); setImportPrivateKey(''); }} className="px-4 py-2 text-slate-600 hover:bg-slate-50 rounded-lg">取消</button>
+              <button onClick={() => { setShowCreate(false); setCreateMode('generate'); setImportPrivateKey(''); }} className="px-4 py-2 text-slate-600 hover:bg-slate-50 rounded-lg">取消</button>
             </div>
           </div>
         </div>

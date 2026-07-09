@@ -5,14 +5,15 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/linux-deploy-manager/internal/crypto"
 	"github.com/linux-deploy-manager/internal/model"
 	"github.com/linux-deploy-manager/internal/repository"
 )
 
 // NewClientFromNode 根据节点信息创建并连接 SSH 客户端
-// password 是已解密/原始的密码，传入前需自行解密
-// 这是 server_node_service, task_service, connectivity 三处 createSSHClient 的公共函数
-func NewClientFromNode(node *model.ServerNode, password string, keyRepo repository.KeyRepository) (*Client, error) {
+// 自动处理密码解密（兼容加密后的新数据与明文的旧数据）
+// 所有调用方都使用此函数，无需自行处理密码
+func NewClientFromNode(node *model.ServerNode, keyRepo repository.KeyRepository) (*Client, error) {
 	ctx := context.Background()
 	var client *Client
 	var err error
@@ -35,6 +36,14 @@ func NewClientFromNode(node *model.ServerNode, password string, keyRepo reposito
 			return nil, err
 		}
 	case "password":
+		password := node.Password
+		// 先尝试解密（新数据），失败则使用原值（旧明文数据）
+		if password != "" {
+			decrypted, dErr := crypto.Decrypt(password)
+			if dErr == nil {
+				password = string(decrypted)
+			}
+		}
 		client, err = NewClientWithPassword(node.Host, node.Port, node.User, password)
 		if err != nil {
 			return nil, err

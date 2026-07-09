@@ -9,7 +9,7 @@
 #   ./release.sh                              # 交互式填写
 #   ./release.sh -m "feat: 新增自动更新功能"    # 指定 commit 信息
 #   ./release.sh -m "fix: 修复bug" -e staging  # 发布到测试环境
-#   ./release.sh -m "feat: v2.0" -e production # 发布到生产环境
+#   ./release.sh -m "fix: 更新版本号至 1.1.1，移除不必要的构建配置" -e production # 发布到生产环境
 #   ./release.sh -m "msg" --skip-build         # 跳过本地构建验证
 #   ./release.sh --dry-run                    # 预览模式，不执行实际操作
 #   ./release.sh --help                       # 查看帮助

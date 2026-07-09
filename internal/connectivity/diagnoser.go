@@ -200,7 +200,7 @@ func (r *ConnectivityReport) getItemStatus(id string) string {
 
 // createSSHClient 创建 SSH 客户端（诊断专用，每次新建连接）
 func (d *ConnectivityDiagnoser) createSSHClient(node *model.ServerNode) (*sshclient.Client, error) {
-	return sshclient.NewClientFromNode(node, "", d.keyRepo)
+	return sshclient.NewClientFromNode(node, d.keyRepo)
 }
 
 // rawTCPDial 尝试原始 TCP 连接（用于 D2 诊断）

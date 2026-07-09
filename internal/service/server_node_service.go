@@ -252,13 +252,6 @@ func sanitizeKeyName(name string) string {
 
 // createSSHClient 创建 SSH 客户端
 func (s *ServerNodeService) createSSHClient(node *model.ServerNode) (*sshclient.Client, error) {
-	password := node.Password
-	if password != "" && node.AuthType == "password" {
-		decrypted, err := crypto.Decrypt(password)
-		if err == nil {
-			password = string(decrypted)
-		}
-	}
-	return sshclient.NewClientFromNode(node, password, s.keyRepo)
+	return sshclient.NewClientFromNode(node, s.keyRepo)
 }
 

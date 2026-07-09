@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
-import { Play, Download, RotateCcw, ChevronDown, ChevronUp, Save, ArrowLeft, FolderOpen, X, ArrowUp } from 'lucide-react'
+import { Play, Download, RotateCcw, ChevronDown, ChevronUp, Save, ArrowLeft, FolderOpen, ArrowUp } from 'lucide-react'
 import { projectApi, keyApi, taskApi, fsApi, envmanApi, serverNodeApi } from '../utils/api'
 import { useWebSocket } from '../hooks/useWebSocket'
 import type { ServerNode } from '../types'
@@ -10,12 +10,6 @@ interface SSHKey {
   name: string
   algorithm: string
   source: 'managed' | 'system'
-}
-
-interface DirEntry {
-  name: string
-  path: string
-  is_dir: boolean
 }
 
 interface LocalConfig {
@@ -126,15 +120,14 @@ interface SectionProps {
 
 function Section({ title, id, children, sectionRef }: SectionProps) {
   return (
-    <div ref={sectionRef} id={id} className="space-y-2 scroll-mt-4">
-      <h3 className="text-sm font-semibold text-slate-700 uppercase tracking-wider">{title}</h3>
+    <div ref={sectionRef} id={id} className="scroll-mt-24">
+      <h3 className="text-base font-semibold text-slate-800 mb-4 flex items-center gap-2">
+        <span className="w-1 h-4 bg-amber-500 rounded-full inline-block" />
+        {title}
+      </h3>
       {children}
     </div>
   )
-}
-
-function Divider() {
-  return <div className="border-t border-slate-100" />
 }
 
 interface TimelineItem {
@@ -146,6 +139,7 @@ interface TimelineItem {
 function Timeline({ items }: { items: TimelineItem[] }) {
   const [activeId, setActiveId] = useState<string>('')
   const [collapsed, setCollapsed] = useState(false)
+  const [hoveredId, setHoveredId] = useState<string | null>(null)
 
   useEffect(() => {
     const observer = new IntersectionObserver(
@@ -172,36 +166,137 @@ function Timeline({ items }: { items: TimelineItem[] }) {
     ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start', inline: 'nearest' })
   }
 
+  const activeIndex = items.findIndex((item) => item.id === activeId)
+
   return (
-    <div className="hidden lg:block fixed left-[15rem] top-24 z-30">
-      <div className="bg-white/95 backdrop-blur rounded-xl shadow-lg border border-slate-200/80 p-2 w-40">
-        <div className="flex items-center justify-between px-2 mb-1">
-          <div className="text-xs font-medium text-slate-500">页面索引</div>
+    <div className="hidden lg:block fixed left-[max(0px,calc(50%-720px))] top-24 z-30">
+      <div className="bg-white/95 backdrop-blur rounded-xl shadow-lg border border-slate-200/80 overflow-hidden transition-all duration-300">
+        {/* 头部 */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100">
+          <div className="flex items-center gap-2">
+            <div className="w-5 h-5 rounded-md bg-amber-50 flex items-center justify-center">
+              <svg className="w-3 h-3 text-amber-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </div>
+            <span className="text-xs font-semibold text-slate-500 tracking-wide">导航</span>
+          </div>
           <button
             onClick={() => setCollapsed(!collapsed)}
-            className="text-slate-400 hover:text-slate-600 p-0.5"
+            className="flex items-center gap-1 text-xs text-slate-400 hover:text-slate-600 px-2 py-1 rounded-md hover:bg-slate-50 transition-all"
           >
+            <svg
+              className={`w-3 h-3 transition-transform duration-200 ${collapsed ? '' : 'rotate-180'}`}
+              fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 15l7-7 7 7" />
+            </svg>
             {collapsed ? '展开' : '收起'}
           </button>
         </div>
+
+        {/* 步骤列表 */}
         {!collapsed && (
-          <div className="space-y-0.5">
-            {items.map((item, index) => (
-              <button
-                key={item.id}
-                onClick={() => scrollTo(item.ref)}
-                className={`w-full flex items-center gap-2 px-2 py-1 text-left text-xs rounded-md transition-colors ${
-                  activeId === item.id
-                    ? 'bg-amber-50 text-amber-700 font-medium'
-                    : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'
-                }`}
-              >
-                <span className="flex items-center justify-center w-4 h-4 rounded-full bg-slate-100 text-[9px] text-slate-500 shrink-0">
-                  {index + 1}
-                </span>
-                <span className="truncate">{item.title}</span>
-              </button>
-            ))}
+          <div className="p-3">
+            <div className="relative">
+              {/* 纵向连接线 */}
+              <div className="absolute left-[17px] top-2 bottom-2 w-0.5 bg-slate-100 rounded-full" />
+              {/* 高亮线段（跟随当前活跃步骤） */}
+              {activeIndex >= 0 && (
+                <div
+                  className="absolute left-[17px] w-0.5 bg-amber-400 rounded-full transition-all duration-500"
+                  style={{
+                    top: `${activeIndex * 40 + 10}px`,
+                    height: `${40}px`,
+                  }}
+                />
+              )}
+
+              <div className="space-y-0">
+                {items.map((item, index) => {
+                  const isActive = activeId === item.id
+                  const isPast = index < activeIndex
+                  const isHovered = hoveredId === item.id
+
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => scrollTo(item.ref)}
+                      onMouseEnter={() => setHoveredId(item.id)}
+                      onMouseLeave={() => setHoveredId(null)}
+                      className="relative w-full flex items-center gap-3 px-2 py-2 text-left rounded-lg transition-all duration-200 group"
+                    >
+                      {/* 步骤圆点 */}
+                      <div
+                        className={`relative z-10 flex items-center justify-center w-[34px] h-[34px] rounded-full shrink-0 transition-all duration-300 ${
+                          isActive
+                            ? 'bg-amber-500 text-white shadow-md shadow-amber-200 scale-110'
+                            : isPast
+                            ? 'bg-amber-100 text-amber-600'
+                            : isHovered
+                            ? 'bg-slate-100 text-slate-600'
+                            : 'bg-slate-50 text-slate-400'
+                        }`}
+                      >
+                        {isPast ? (
+                          <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                          </svg>
+                        ) : (
+                          <span className={`text-xs font-bold ${isActive ? 'text-white' : ''}`}>{index + 1}</span>
+                        )}
+                      </div>
+
+                      {/* 文字 */}
+                      <div className="min-w-0 flex-1">
+                        <div className={`text-xs font-medium transition-colors duration-200 ${
+                          isActive
+                            ? 'text-amber-700'
+                            : isPast
+                            ? 'text-slate-500'
+                            : 'text-slate-500 group-hover:text-slate-700'
+                        }`}>
+                          {item.title}
+                        </div>
+                        <div className="text-[10px] text-slate-400 mt-0.5">
+                          {index === 0 ? '名称与仓库' : index === 1 ? '代码与密钥' : index === 2 ? '环境配置' : index === 3 ? '部署策略' : ''}
+                        </div>
+                      </div>
+
+                      {/* 活跃指示条 */}
+                      {isActive && (
+                        <div className="absolute right-1 top-1/2 -translate-y-1/2 w-1 h-6 rounded-full bg-amber-400" />
+                      )}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* 底部操作提示 */}
+            <div className="mt-3 pt-3 border-t border-slate-100">
+              <div className="px-2 py-1.5 rounded-md bg-amber-50/50">
+                <div className="text-[10px] text-amber-600 leading-relaxed">
+                  点击跳转至对应区域
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 折叠态：简洁指示器 */}
+        {collapsed && (
+          <div className="p-2 flex justify-center">
+            <div className="flex items-center gap-1">
+              {items.map((item) => (
+                <div
+                  key={item.id}
+                  className={`w-1.5 h-1.5 rounded-full transition-all ${
+                    activeId === item.id ? 'bg-amber-500 scale-125' : 'bg-slate-200'
+                  }`}
+                />
+              ))}
+            </div>
           </div>
         )}
       </div>
@@ -212,12 +307,12 @@ function Timeline({ items }: { items: TimelineItem[] }) {
 function RuntimeEnvHint({ runtime }: { runtime: string }) {
   const example = runtimeExamples[runtime] || runtimeExamples.other
   return (
-    <div className="text-xs text-slate-500 bg-white border border-slate-200 rounded-md p-2.5 space-y-1">
-      <div className="font-medium text-slate-600">命令参考：</div>
-      <div>预部署：{example.pre}</div>
-      <div>部署：{example.deploy}</div>
-      <div>后部署：{example.post}</div>
-      {example.check && <div className="text-slate-400">环境检查：{example.check}</div>}
+    <div className="text-xs text-slate-500 bg-white border border-slate-200 rounded-lg p-3 space-y-1.5">
+      <div className="font-medium text-slate-600 mb-1">命令参考</div>
+      <div className="flex items-start gap-2"><span className="text-slate-400 w-14 shrink-0">预部署：</span><code className="font-mono bg-slate-100 px-1 rounded">{example.pre}</code></div>
+      <div className="flex items-start gap-2"><span className="text-slate-400 w-14 shrink-0">部署：</span><code className="font-mono bg-slate-100 px-1 rounded">{example.deploy}</code></div>
+      <div className="flex items-start gap-2"><span className="text-slate-400 w-14 shrink-0">后部署：</span><code className="font-mono bg-slate-100 px-1 rounded">{example.post}</code></div>
+      {example.check && <div className="flex items-start gap-2"><span className="text-slate-400 w-14 shrink-0">检查：</span><code className="font-mono bg-slate-100 px-1 rounded">{example.check}</code></div>}
     </div>
   )
 }
@@ -240,18 +335,10 @@ export default function TemplateForm() {
   const [latestSuccessTask, setLatestSuccessTask] = useState<any>(null)
 
   // 环境管理工具检测
-  const [envmanTools, setEnvmanTools] = useState<Record<string, { installed: boolean; version: string }>>({})
   const [availableEnvs, setAvailableEnvs] = useState<string[]>([])
-  const [checkingEnv, setCheckingEnv] = useState(false)
   const [showAddEnv, setShowAddEnv] = useState(false)
   const [newEnvName, setNewEnvName] = useState('')
   const [creatingEnv, setCreatingEnv] = useState(false)
-
-  // 目录选择器
-  const [showDirPicker, setShowDirPicker] = useState(false)
-  const [currentDir, setCurrentDir] = useState('/')
-  const [dirEntries, setDirEntries] = useState<DirEntry[]>([])
-  const [dirLoading, setDirLoading] = useState(false)
 
   // 目录检查
   const [dirCheck, setDirCheck] = useState<{
@@ -335,8 +422,8 @@ export default function TemplateForm() {
 
     envmanApi
       .detect()
-      .then((res) => setEnvmanTools(res.data.data?.tools || {}))
-      .catch(() => setEnvmanTools({}))
+      .then(() => {})
+      .catch(() => {})
   }, [])
 
   useEffect(() => {
@@ -394,31 +481,7 @@ export default function TemplateForm() {
     }
   }, [form.code_dir, form.name, form.git_url])
 
-  // 加载目录列表
-  const loadDirEntries = async (path: string) => {
-    setDirLoading(true)
-    try {
-      const res = await fsApi.listDir(path)
-      setDirEntries(res.data.data?.entries || [])
-      setCurrentDir(path)
-    } catch (err: any) {
-      setError(err.response?.data?.message || '加载目录失败')
-    } finally {
-      setDirLoading(false)
-    }
-  }
-
-  const openDirPicker = () => {
-    const startPath = form.code_dir || '/'
-    loadDirEntries(startPath)
-    setShowDirPicker(true)
-  }
-
-  const selectDir = (path: string) => {
-    setForm({ ...form, code_dir: path })
-    setShowDirPicker(false)
-  }
-
+  // 加载目录列表 — placeholder
   const buildPayload = () => {
     return {
       ...form,
@@ -431,21 +494,14 @@ export default function TemplateForm() {
 
   const handleCheckEnv = async (tool?: string) => {
     const targetTool = tool || localConfig.env_manager
-    setCheckingEnv(true)
     setError('')
     try {
-      const [detectRes, envsRes] = await Promise.all([
-        envmanApi.detect(),
-        targetTool && targetTool !== 'none'
-          ? envmanApi.listEnvs(targetTool)
-          : Promise.resolve({ data: { data: { envs: [] } } }),
-      ])
-      setEnvmanTools(detectRes.data.data?.tools || {})
+      const envsRes = await (targetTool && targetTool !== 'none'
+        ? envmanApi.listEnvs(targetTool)
+        : Promise.resolve({ data: { data: { envs: [] } } }))
       setAvailableEnvs(envsRes.data.data?.envs || [])
     } catch (err: any) {
       setError(err.response?.data?.message || '环境检查失败')
-    } finally {
-      setCheckingEnv(false)
     }
   }
 
@@ -641,733 +697,691 @@ export default function TemplateForm() {
   }
 
   const inputCls =
-    'w-full px-2.5 py-1.5 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500'
+    'w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition-colors'
   const textareaCls =
-    'w-full px-2.5 py-1.5 text-sm border border-slate-300 rounded-md focus:outline-none focus:ring-1 focus:ring-amber-500 font-mono'
-  const labelCls = 'block text-xs font-medium text-slate-500 mb-0.5'
+    'w-full px-3 py-2 text-sm border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500/30 focus:border-amber-500 transition-colors font-mono'
+  const labelCls = 'block text-sm font-medium text-slate-600 mb-1'
+  const selectCardCls = (active: boolean) =>
+    `flex-1 p-4 text-sm border-2 rounded-xl text-left transition-all ${
+      active
+        ? 'border-amber-500 bg-amber-50/50 shadow-sm'
+        : 'border-slate-200 hover:border-slate-300 hover:bg-slate-50'
+    }`
 
   if (loading) {
-    return <div className="p-4 text-slate-500 text-sm">加载中...</div>
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="flex flex-col items-center gap-3 text-slate-400">
+          <div className="w-8 h-8 border-2 border-slate-200 border-t-amber-500 rounded-full animate-spin" />
+          <span className="text-sm">加载中...</span>
+        </div>
+      </div>
+    )
   }
 
   return (
-    <div className="space-y-3">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
+    <div className="max-w-5xl mx-auto">
+      {/* 顶部导航栏 */}
+      <div className="flex items-center justify-between mb-8">
+        <div className="flex items-center gap-3">
           <button
             onClick={() => navigate('/projects')}
-            className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg"
+            className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+            title="返回项目列表"
           >
-            <ArrowLeft size={18} />
+            <ArrowLeft size={20} />
           </button>
-          <h2 className="text-lg font-bold text-slate-800">{isEdit ? '部署模板' : '创建模板'}</h2>
+          <div>
+            <h1 className="text-xl font-bold text-slate-800">
+              {isEdit ? '编辑部署项目' : '创建部署项目'}
+            </h1>
+            <p className="text-sm text-slate-400 mt-0.5">
+              {isEdit ? '修改项目配置后记得保存' : '配置 Git 仓库和部署方式，快速搭建自动化部署'}
+            </p>
+          </div>
         </div>
         <button
           onClick={handleSaveClick}
           disabled={saving}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-amber-600 text-white rounded-md hover:bg-amber-700 transition-colors disabled:opacity-50"
+          className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors disabled:opacity-50 shadow-sm"
         >
-          <Save size={14} />
-          {saving ? '保存中...' : '保存模板'}
+          <Save size={16} />
+          {saving ? '保存中...' : '保存项目'}
         </button>
       </div>
 
+      {/* 错误提示 */}
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-md text-xs">
+        <div className="mb-6 bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm flex items-center gap-2">
+          <span className="w-1.5 h-1.5 bg-red-500 rounded-full shrink-0" />
           {error}
         </div>
       )}
 
+      {/* 侧边导航 */}
       <Timeline items={timelineItems} />
-      <div className="space-y-3 lg:pl-44">
-        <div className="bg-white rounded-lg border border-slate-200 p-4 space-y-3">
-          <Section title="基本信息" id="section-basic" sectionRef={basicRef}>
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-            <div className="md:col-span-1">
-              <label className={labelCls}>模板名称</label>
-              <input
-                type="text"
-                value={form.name}
-                onChange={(e) => setForm({ ...form, name: e.target.value })}
-                className={inputCls}
-                placeholder="如：web-api"
-              />
-            </div>
-            <div className="md:col-span-3">
-              <label className={labelCls}>描述</label>
-              <input
-                type="text"
-                value={form.description}
-                onChange={(e) => setForm({ ...form, description: e.target.value })}
-                className={inputCls}
-                placeholder="简要描述用途"
-              />
-            </div>
-          </div>
-        </Section>
 
-        <Divider />
+      {/* 主表单区域 */}
+      <div className="space-y-6 lg:pl-52">
 
-        <Section title="Git 配置" id="section-git" sectionRef={gitRef}>
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
-            <div className="md:col-span-6">
-              <label className={labelCls}>Git 仓库地址</label>
-              <input
-                type="text"
-                value={form.git_url}
-                onChange={(e) => setForm({ ...form, git_url: e.target.value })}
-                className={inputCls}
-                placeholder="git@github.com:owner/repo.git"
-              />
-            </div>
-            <div className="md:col-span-3">
-              <label className={labelCls}>SSH 密钥</label>
-              <select
-                value={form.ssh_key_id}
-                onChange={(e) => setForm({ ...form, ssh_key_id: Number(e.target.value) })}
-                className={inputCls}
-              >
-                <option value={0}>请选择密钥</option>
-                {keys.map((k) => (
-                  <option key={k.id} value={k.id}>
-                    {k.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div className="md:col-span-3">
-              <label className={labelCls}>目标服务器</label>
-              <select
-                value={form.server_node_id}
-                onChange={(e) => setForm({ ...form, server_node_id: Number(e.target.value) })}
-                className={inputCls}
-              >
-                <option value={0}>请选择服务器</option>
-                {serverNodes
-                  .filter((n) => n.status === 'online')
-                  .map((n) => (
-                    <option key={n.id} value={n.id}>
-                      {n.name} ({n.status === 'online' ? '在线' : n.status})
-                    </option>
-                  ))}
-              </select>
-              {serverNodes.length === 0 && (
-                <div className="text-xs text-amber-600 mt-1">
-                  暂无在线服务器，请先
-                  <Link to="/server-nodes" className="underline hover:text-amber-700">添加服务器</Link>
-                </div>
-              )}
-            </div>
-            <div className="md:col-span-3">
-              <label className={labelCls}>代码目录</label>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={form.code_dir}
-                  onChange={(e) => setForm({ ...form, code_dir: e.target.value })}
-                  className={inputCls}
-                  placeholder="/opt/apps/..."
-                />
-                <button
-                  onClick={openDirPicker}
-                  className="px-2.5 py-1.5 text-slate-600 hover:bg-slate-50 border border-slate-300 rounded-md"
-                  title="选择目录"
-                >
-                  <FolderOpen size={16} />
-                </button>
-              </div>
-            </div>
-          </div>
-          {form.code_dir && (
-            <div className="mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-md px-2.5 py-1.5">
-              <span className="font-medium">即将部署的位置：</span>
-              <code className="font-mono">{form.code_dir}/{form.name || '<模板名称>'}</code>
-            </div>
-          )}
-          {dirChecking && (
-            <div className="mt-1 text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-md px-2.5 py-1.5">
-              检查目录状态...
-            </div>
-          )}
-          {dirCheck && !dirChecking && (
-            <div
-              className={`mt-1 text-xs rounded-md px-2.5 py-1.5 border ${
-                dirCheck.match === false
-                  ? 'text-red-700 bg-red-50 border-red-200'
-                  : dirCheck.match === true
-                  ? 'text-green-700 bg-green-50 border-green-200'
-                  : dirCheck.exists && !dirCheck.has_git
-                  ? 'text-amber-700 bg-amber-50 border-amber-200'
-                  : 'text-blue-700 bg-blue-50 border-blue-200'
-              }`}
-            >
-              {dirCheck.message}
-            </div>
-          )}
-        </Section>
-
-        <Divider />
-
-        <Section title="环境变量" id="section-env" sectionRef={envRef}>
-          <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
-            <div className="md:col-span-2">
-              <label className={labelCls}>格式</label>
-              <select
-                value={form.env_format}
-                onChange={(e) => setForm({ ...form, env_format: e.target.value as 'dotenv' | 'json' })}
-                className={inputCls}
-              >
-                <option value="dotenv">.env</option>
-                <option value="json">JSON</option>
-                <option value="yaml">YAML</option>
-                <option value="plain">纯文本</option>
-              </select>
-            </div>
-            <div className="md:col-span-10">
-              <label className={labelCls}>内容</label>
-              <textarea
-                value={form.env_content}
-                onChange={(e) => setForm({ ...form, env_content: e.target.value })}
-                className={textareaCls}
-                rows={3}
-                placeholder="NODE_ENV=production&#10;PORT=3000"
-              />
-            </div>
-          </div>
-        </Section>
-
-        <Divider />
-
-        <div className="w-full md:w-32">
-          <label className={labelCls}>超时时间（秒）</label>
-          <input
-            type="number"
-            value={form.timeout_sec}
-            onChange={(e) => setForm({ ...form, timeout_sec: Number(e.target.value) })}
-            className={inputCls}
-          />
-        </div>
-
-        <Divider />
-
-        <Section title="部署方式" id="section-mode" sectionRef={modeRef}>
-          <div className="flex gap-3">
-            <button
-              onClick={() => {
-                const examples = runtimeExamples[localConfig.runtime_env] || runtimeExamples.other
-                setForm({
-                  ...form,
-                  deploy_mode: 'local',
-                  pre_cmd: examples.pre,
-                  deploy_cmd: examples.deploy,
-                  post_cmd: examples.post,
-                })
-              }}
-              className={`flex-1 p-2.5 text-sm border rounded-md text-left transition-colors ${
-                form.deploy_mode === 'local' ? 'border-amber-500 bg-amber-50' : 'border-slate-200 hover:bg-slate-50'
-              }`}
-            >
-              <div className="font-medium text-slate-800">本地化部署</div>
-              <div className="text-xs text-slate-500">直接在服务器运行进程</div>
-            </button>
-            <button
-              onClick={() =>
-                setForm({
-                  ...form,
-                  deploy_mode: 'container',
-                  pre_cmd: '',
-                  deploy_cmd: '',
-                  post_cmd: '',
-                })
-              }
-              className={`flex-1 p-2.5 text-sm border rounded-md text-left transition-colors ${
-                form.deploy_mode === 'container' ? 'border-amber-500 bg-amber-50' : 'border-slate-200 hover:bg-slate-50'
-              }`}
-            >
-              <div className="font-medium text-slate-800">容器化部署</div>
-              <div className="text-xs text-slate-500">使用 docker-compose 构建并运行容器</div>
-            </button>
-          </div>
-
-          {form.deploy_mode === 'local' && (
-            <div className="mt-3 space-y-3 p-3 bg-slate-50 rounded-md border border-slate-100">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        {/* ── 卡片：基本信息 + Git 配置 ── */}
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+          {/* 基本信息 */}
+          <div className="p-6 pb-4 border-b border-slate-100">
+            <Section title="基本信息" id="section-basic" sectionRef={basicRef}>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
                 <div>
-                  <label className={labelCls}>运行环境 / 技术栈</label>
-                  <select
-                    value={localConfig.runtime_env}
-                    onChange={(e) => {
-                      const newRuntime = e.target.value
-                      const examples = runtimeExamples[newRuntime] || runtimeExamples.other
-                      setLocalConfig({ ...localConfig, runtime_env: newRuntime })
-                      setForm({ ...form, pre_cmd: examples.pre, deploy_cmd: examples.deploy, post_cmd: examples.post })
-                    }}
+                  <label className={labelCls}>项目名称</label>
+                  <input
+                    type="text"
+                    value={form.name}
+                    onChange={(e) => setForm({ ...form, name: e.target.value })}
                     className={inputCls}
-                  >
-                    <option value="nodejs">Node.js</option>
-                    <option value="python">Python</option>
-                    <option value="java">Java</option>
-                    <option value="go">Go</option>
-                    <option value="php">PHP</option>
-                    <option value="ruby">Ruby</option>
-                    <option value="dotnet">.NET</option>
-                    <option value="other">其他</option>
-                  </select>
-                </div>
-                <div>
-                  <label className={labelCls}>执行方式</label>
-                  <select
-                    value={localConfig.exec_type}
-                    onChange={(e) => setLocalConfig({ ...localConfig, exec_type: e.target.value as any })}
-                    className={inputCls}
-                  >
-                    <option value="direct">直接执行</option>
-                    <option value="background">后台运行（nohup）</option>
-                    <option value="systemd">systemd 服务</option>
-                  </select>
-                </div>
-                <div>
-                  <label className={labelCls}>环境管理工具</label>
-                  <select
-                    value={localConfig.env_manager}
-                    onChange={(e) =>
-                      setLocalConfig({
-                        ...localConfig,
-                        env_manager: e.target.value as any,
-                        env_manager_env: '',
-                      })
-                    }
-                    className={inputCls}
-                  >
-                    <option value="none">不使用</option>
-                    <option value="nvm">nvm（Node 版本管理）</option>
-                    <option value="conda">conda（Python 环境）</option>
-                    <option value="pyenv">pyenv（Python 版本管理）</option>
-                  </select>
-                </div>
-
-                {localConfig.env_manager !== 'none' && (
-                  <div className="md:col-span-2">
-                    <label className={labelCls}>
-                      {localConfig.env_manager === 'nvm'
-                        ? 'Node 版本'
-                        : localConfig.env_manager === 'conda'
-                        ? 'conda 环境名'
-                        : 'Python 版本'}
-                    </label>
-                    <div className="flex items-center gap-2">
-                      <select
-                        value={localConfig.env_manager_env}
-                        onChange={(e) => setLocalConfig({ ...localConfig, env_manager_env: e.target.value })}
-                        className={inputCls}
-                        disabled={availableEnvs.length === 0}
-                      >
-                        <option value="">
-                          {availableEnvs.length === 0 ? '请先检查服务器环境' : '请选择环境'}
-                        </option>
-                        {availableEnvs.map((env) => (
-                          <option key={env} value={env}>
-                            {env}
-                          </option>
-                        ))}
-                      </select>
-                      <button
-                        type="button"
-                        onClick={() => setShowAddEnv(!showAddEnv)}
-                        className="px-3 py-1.5 text-xs whitespace-nowrap bg-white border border-slate-300 rounded-md hover:bg-slate-50"
-                      >
-                        {showAddEnv ? '取消' : '新增环境'}
-                      </button>
-                    </div>
-                    {showAddEnv && (
-                      <div className="mt-2 flex items-center gap-2">
-                        <input
-                          type="text"
-                          value={newEnvName}
-                          onChange={(e) => setNewEnvName(e.target.value)}
-                          className={inputCls}
-                          placeholder={
-                            localConfig.env_manager === 'nvm'
-                              ? 'v20.11.0'
-                              : localConfig.env_manager === 'conda'
-                              ? 'myenv'
-                              : '3.11.0'
-                          }
-                        />
-                        <button
-                          type="button"
-                          onClick={handleCreateEnv}
-                          disabled={creatingEnv || !newEnvName.trim()}
-                          className="px-3 py-1.5 text-xs whitespace-nowrap bg-amber-500 text-white rounded-md hover:bg-amber-600 disabled:opacity-50"
-                        >
-                          {creatingEnv ? '创建中...' : '创建'}
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {localConfig.exec_type === 'systemd' && (
-                  <>
-                    <div>
-                      <label className={labelCls}>服务名</label>
-                      <input
-                        type="text"
-                        value={localConfig.service_name}
-                        onChange={(e) => setLocalConfig({ ...localConfig, service_name: e.target.value })}
-                        className={inputCls}
-                        placeholder="my-app"
-                      />
-                    </div>
-                    <div>
-                      <label className={labelCls}>运行用户</label>
-                      <input
-                        type="text"
-                        value={localConfig.run_user}
-                        onChange={(e) => setLocalConfig({ ...localConfig, run_user: e.target.value })}
-                        className={inputCls}
-                        placeholder="root"
-                      />
-                    </div>
-                  </>
-                )}
-              </div>
-
-              <div className="grid grid-cols-1 gap-3">
-                <div>
-                  <div className="flex items-center gap-1.5 mb-0.5">
-                    <label className={labelCls}>预部署命令</label>
-                    <span className="text-[10px] text-slate-400">安装依赖 / 构建</span>
-                  </div>
-                  <textarea
-                    value={form.pre_cmd}
-                    onChange={(e) => setForm({ ...form, pre_cmd: e.target.value })}
-                    className={textareaCls}
-                    rows={2}
-                    placeholder="npm install && npm run build"
-                  />
-                  <div className="flex items-center gap-2 mt-1.5">
-                    <input
-                      id="skip-pre-cmd"
-                      type="checkbox"
-                      checked={localConfig.skip_pre_cmd}
-                      onChange={(e) => setLocalConfig({ ...localConfig, skip_pre_cmd: e.target.checked })}
-                      className="h-4 w-4 text-amber-500 border-slate-300 rounded"
-                    />
-                    <label htmlFor="skip-pre-cmd" className="text-xs text-slate-500 cursor-pointer select-none">
-                      重新部署时跳过预部署命令
-                    </label>
-                  </div>
-                </div>
-                <div>
-                  <div className="flex items-center gap-1.5 mb-0.5">
-                    <label className={labelCls}>执行命令</label>
-                    <span className="text-[10px] text-slate-400">启动应用，选择运行环境后自动填充</span>
-                  </div>
-                  <textarea
-                    value={form.deploy_cmd}
-                    onChange={(e) => setForm({ ...form, deploy_cmd: e.target.value })}
-                    className={textareaCls}
-                    rows={2}
-                    placeholder="npm start"
+                    placeholder="如：web-api"
                   />
                 </div>
-                <div>
-                  <div className="flex items-center gap-1.5 mb-0.5">
-                    <label className={labelCls}>后部署命令</label>
-                    <span className="text-[10px] text-slate-400">健康检查 / 通知</span>
-                  </div>
-                  <textarea
-                    value={form.post_cmd}
-                    onChange={(e) => setForm({ ...form, post_cmd: e.target.value })}
-                    className={textareaCls}
-                    rows={2}
-                    placeholder="echo '部署完成'"
+                <div className="md:col-span-2">
+                  <label className={labelCls}>项目描述</label>
+                  <input
+                    type="text"
+                    value={form.description}
+                    onChange={(e) => setForm({ ...form, description: e.target.value })}
+                    className={inputCls}
+                    placeholder="简要描述项目的用途"
                   />
                 </div>
               </div>
+            </Section>
+          </div>
 
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  onClick={() => handleCheckEnv()}
-                  disabled={checkingEnv}
-                  className="px-3 py-1.5 text-xs bg-white border border-slate-300 rounded-md hover:bg-slate-50 disabled:opacity-50"
-                >
-                  {checkingEnv ? '检查中...' : '检查服务器环境'}
-                </button>
-                <div className="flex gap-2 text-xs">
-                  {['nvm', 'conda', 'pyenv'].map((tool) => (
-                    <span
-                      key={tool}
-                      className={`px-2 py-0.5 rounded ${
-                        envmanTools[tool]?.installed
-                          ? 'bg-green-50 text-green-600'
-                          : 'bg-slate-100 text-slate-400'
-                      }`}
-                    >
-                      {tool} {envmanTools[tool]?.installed ? '✓' : '✗'}
-                    </span>
-                  ))}
+          {/* Git 配置 */}
+          <div className="p-6">
+            <Section title="Git 仓库" id="section-git" sectionRef={gitRef}>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                <div className="md:col-span-2">
+                  <label className={labelCls}>仓库地址</label>
+                  <input
+                    type="text"
+                    value={form.git_url}
+                    onChange={(e) => setForm({ ...form, git_url: e.target.value })}
+                    className={inputCls}
+                    placeholder="git@github.com:owner/repo.git"
+                  />
                 </div>
-              </div>
-
-              <RuntimeEnvHint runtime={localConfig.runtime_env} />
-            </div>
-          )}
-
-          {form.deploy_mode === 'container' && (
-            <div className="mt-3 space-y-2 p-3 bg-slate-50 rounded-md border border-slate-100">
-              <div className="text-xs text-slate-500">
-                容器化部署仅支持 docker-compose。默认执行 <code className="bg-white px-1 rounded">docker-compose build</code> 和 <code className="bg-white px-1 rounded">docker-compose up -d</code>，可自行修改命令。
-              </div>
-              <div>
-                <label className={labelCls}>compose 文件路径</label>
-                <input
-                  type="text"
-                  value={containerConfig.compose_file}
-                  onChange={(e) => setContainerConfig({ ...containerConfig, compose_file: e.target.value })}
-                  className={inputCls}
-                  placeholder="docker-compose.yml"
-                />
-              </div>
-              <div>
-                <label className={labelCls}>构建命令</label>
-                <input
-                  type="text"
-                  value={containerConfig.build_cmd}
-                  onChange={(e) => setContainerConfig({ ...containerConfig, build_cmd: e.target.value })}
-                  className={inputCls}
-                  placeholder="docker-compose build"
-                />
-              </div>
-              <div>
-                <label className={labelCls}>启动命令</label>
-                <input
-                  type="text"
-                  value={containerConfig.up_cmd}
-                  onChange={(e) => setContainerConfig({ ...containerConfig, up_cmd: e.target.value })}
-                  className={inputCls}
-                  placeholder="docker-compose up -d"
-                />
-              </div>
-              <div className="pt-1 text-xs text-slate-500">
-                sudo 权限已在
-                <a href="/settings" className="font-medium text-amber-600 hover:text-amber-700 mx-0.5">
-                  系统设置
-                </a>
-                中统一配置。
-              </div>
-            </div>
-          )}
-        </Section>
-
-        {isEdit && (
-          <>
-            <Divider />
-
-            <Section title="部署操作" id="section-deploy" sectionRef={deployRef}>
-              {latestSuccessTask && (
-                <div className="p-3 bg-green-50 border border-green-200 rounded-md mb-3">
-                  <div className="text-xs text-green-700 font-medium mb-1">上一次成功部署</div>
-                  <div className="grid grid-cols-4 gap-2 text-xs text-green-600">
-                    <div>分支: <span className="font-mono text-green-800">{latestSuccessTask.branch}</span></div>
-                    <div>Commit: <span className="font-mono text-green-800">{latestSuccessTask.commit_sha ? latestSuccessTask.commit_sha.slice(0, 7) : '-'}</span></div>
-                    <div>时间: <span>{formatTimeText(latestSuccessTask.created_at)}</span></div>
-                    <div>任务ID: <span className="font-mono">#{latestSuccessTask.id}</span></div>
-                  </div>
-                </div>
-              )}
-              <div className="flex flex-wrap items-end gap-3">
-                {form.server_node_id > 0 && (
-                  <div className="w-full">
-                    <div className="text-xs text-slate-500 mb-1">目标服务器</div>
-                    <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-md text-sm text-slate-700">
-                      {(() => {
-                        const node = serverNodes.find((n) => n.id === form.server_node_id)
-                        return node ? (
-                          <span>
-                            {node.name} ({node.host}:{node.port})
-                            <span className={`ml-1 inline-block w-1.5 h-1.5 rounded-full ${node.status === 'online' ? 'bg-green-500' : 'bg-red-500'}`} />
-                          </span>
-                        ) : (
-                          <span className="text-slate-400">未知服务器 (ID: {form.server_node_id})</span>
-                        )
-                      })()}
-                    </div>
-                  </div>
-                )}
-                <div className="w-full md:w-56">
-                  <label className={labelCls}>选择分支</label>
+                <div>
+                  <label className={labelCls}>SSH 密钥</label>
                   <select
-                    value={branch}
-                    onChange={(e) => setBranch(e.target.value)}
-                    disabled={deploying}
+                    value={form.ssh_key_id}
+                    onChange={(e) => setForm({ ...form, ssh_key_id: Number(e.target.value) })}
                     className={inputCls}
                   >
-                    <option value="">请选择分支</option>
-                    {branches.map((b) => (
-                      <option key={b} value={b}>
-                        {b}
-                      </option>
+                    <option value={0}>请选择密钥</option>
+                    {keys.map((k) => (
+                      <option key={k.id} value={k.id}>{k.name}</option>
                     ))}
                   </select>
                 </div>
-                <button
-                  onClick={loadBranches}
-                  disabled={branchesLoading}
-                  className="px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-50 rounded-md border border-slate-200 disabled:opacity-50"
-                >
-                  {branchesLoading ? '刷新中...' : '刷新分支'}
-                </button>
-                <button
-                  onClick={handleDeploy}
-                  disabled={!branch || deploying}
-                  className="flex items-center gap-1.5 px-4 py-1.5 text-sm bg-amber-600 text-white rounded-md hover:bg-amber-700 transition-colors disabled:opacity-50"
-                >
-                  {latestSuccessTask ? <RotateCcw size={14} /> : <Play size={14} />}
-                  {deploying ? '部署中...' : latestSuccessTask ? '重新部署' : '确认部署'}
-                </button>
-                {status === 'running' && (
-                  <button
-                    onClick={handleCancel}
-                    className="px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 rounded-md border border-red-200"
+                <div>
+                  <label className={labelCls}>目标服务器</label>
+                  <select
+                    value={form.server_node_id}
+                    onChange={(e) => setForm({ ...form, server_node_id: Number(e.target.value) })}
+                    className={inputCls}
                   >
-                    取消部署
-                  </button>
-                )}
-                {status !== 'idle' && (
-                  <div className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs ${statusColor[status]}`}>
-                    <span className={`w-1.5 h-1.5 rounded-full ${statusDot[status]}`} />
-                    {statusText[status]}
-                    {connected && status === 'running' && <span className="text-slate-400">(WS)</span>}
+                    <option value={0}>本机执行（无需服务器）</option>
+                    {serverNodes
+                      .filter((n) => n.status === 'online' || n.status === 'unknown')
+                      .map((n) => (
+                        <option key={n.id} value={n.id}>{n.name}</option>
+                      ))}
+                  </select>
+                  {serverNodes.length === 0 && (
+                    <p className="text-xs text-amber-600 mt-1.5">
+                      暂无可用服务器，请先
+                      <Link to="/server-nodes" className="underline hover:text-amber-700 font-medium ml-1">添加服务器</Link>
+                    </p>
+                  )}
+                </div>
+                <div className="md:col-span-2">
+                  <label className={labelCls}>代码部署目录</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={form.code_dir}
+                      onChange={(e) => setForm({ ...form, code_dir: e.target.value })}
+                      className={inputCls}
+                      placeholder="/opt/apps"
+                    />
+                    <button
+                      onClick={() => fsApi.checkDir({ code_dir: form.code_dir, name: form.name, git_url: form.git_url })}
+                      className="px-3 py-2 text-slate-500 hover:text-slate-700 hover:bg-slate-50 border border-slate-300 rounded-lg transition-colors"
+                      title="验证目录"
+                    >
+                      <FolderOpen size={18} />
+                    </button>
                   </div>
-                )}
+                  {form.code_dir && (
+                    <div className="mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2">
+                      部署位置：<code className="font-mono font-medium">{form.code_dir}/{form.name || '&lt;项目名称&gt;'}</code>
+                    </div>
+                  )}
+                  {dirChecking && (
+                    <div className="mt-2 text-xs text-slate-500 bg-slate-50 border border-slate-200 rounded-lg px-3 py-2">
+                      正在检查目录状态...
+                    </div>
+                  )}
+                  {dirCheck && !dirChecking && (
+                    <div className={`mt-2 text-xs rounded-lg px-3 py-2 border ${
+                      dirCheck.match === false
+                        ? 'text-red-700 bg-red-50 border-red-200'
+                        : dirCheck.match === true
+                        ? 'text-green-700 bg-green-50 border-green-200'
+                        : dirCheck.exists && !dirCheck.has_git
+                        ? 'text-amber-700 bg-amber-50 border-amber-200'
+                        : 'text-blue-700 bg-blue-50 border-blue-200'
+                    }`}>
+                      {dirCheck.message}
+                    </div>
+                  )}
+                </div>
               </div>
             </Section>
-          </>
-        )}
-      </div>
+          </div>
+        </div>
 
-      {isEdit && (
-        <div ref={logSectionRef} className="bg-white rounded-lg border border-slate-200 overflow-hidden mb-20">
-          <div className="flex items-center justify-between px-3 py-2 bg-slate-50 border-b border-slate-200">
-            <div className="flex items-center gap-2">
-              <button onClick={() => setShowLog(!showLog)} className="text-slate-500 hover:text-slate-700">
-                {showLog ? <ChevronDown size={14} /> : <ChevronUp size={14} />}
-              </button>
-              <span className="text-sm font-medium text-slate-700">部署日志</span>
-              {taskId && <span className="text-xs text-slate-400">#{taskId}</span>}
+        {/* ── 卡片：环境变量 ── */}
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+          <Section title="环境变量" id="section-env" sectionRef={envRef}>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-5">
+              <div>
+                <label className={labelCls}>格式</label>
+                <select
+                  value={form.env_format}
+                  onChange={(e) => setForm({ ...form, env_format: e.target.value as 'dotenv' | 'json' })}
+                  className={inputCls}
+                >
+                  <option value="dotenv">.env</option>
+                  <option value="json">JSON</option>
+                  <option value="yaml">YAML</option>
+                  <option value="plain">纯文本</option>
+                </select>
+              </div>
+              <div className="md:col-span-3">
+                <label className={labelCls}>环境变量内容</label>
+                <textarea
+                  value={form.env_content}
+                  onChange={(e) => setForm({ ...form, env_content: e.target.value })}
+                  className={textareaCls}
+                  rows={4}
+                  placeholder="NODE_ENV=production&#10;PORT=3000&#10;DATABASE_URL=postgresql://localhost/mydb"
+                />
+              </div>
             </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={scrollLogToTop}
-                className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700"
-                title="日志置顶"
-              >
-                <ArrowUp size={12} />
-                置顶
-              </button>
-              <button
-                onClick={handleDownload}
-                disabled={!taskId}
-                className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-700 disabled:opacity-50"
-              >
-                <Download size={12} />
-                下载
-              </button>
+          </Section>
+        </div>
+
+        {/* ── 卡片：超时时间 ── */}
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+          <div className="flex items-center gap-5">
+            <div className="w-40">
+              <label className={labelCls}>部署超时时间</label>
+              <input
+                type="number"
+                value={form.timeout_sec}
+                onChange={(e) => setForm({ ...form, timeout_sec: Number(e.target.value) })}
+                className={inputCls}
+              />
+            </div>
+            <div className="text-xs text-slate-400 leading-relaxed">
+              超过设定时间未完成的部署将被自动终止。<br />
+              建议根据项目构建耗时调整，默认 600 秒（10 分钟）。
             </div>
           </div>
-          {showLog && (
-            <div className="p-3 bg-slate-900 font-mono text-xs text-slate-300 h-[70vh] overflow-y-auto">
-              {logs.length === 0 ? (
-                <span className="text-slate-500">等待部署...</span>
-              ) : (
-                <>
-                  {logs.map((log, i) => (
-                    <div key={i} className="py-0.5 whitespace-pre-wrap">
-                      {log}
-                    </div>
-                  ))}
-                  <div ref={logsEndRef} />
-                </>
-              )}
-            </div>
-          )}
         </div>
-      )}
 
-      {/* 底部占位，确保日志区域可以滚动到页面最上方 */}
-      {isEdit && <div className="h-[10vh]" />}
-      </div>
-
-      {/* 目录选择弹窗 */}
-      {showDirPicker && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-          <div className="bg-white rounded-lg shadow-lg w-full max-w-md flex flex-col max-h-[80vh]">
-            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200">
-              <h3 className="text-sm font-semibold text-slate-800">选择代码目录</h3>
+        {/* ── 卡片：部署方式 ── */}
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+          <Section title="部署方式" id="section-mode" sectionRef={modeRef}>
+            {/* 模式选择卡片 */}
+            <div className="flex gap-4 mb-6">
               <button
-                onClick={() => setShowDirPicker(false)}
-                className="p-1 text-slate-400 hover:text-slate-600 rounded"
+                onClick={() => {
+                  const examples = runtimeExamples[localConfig.runtime_env] || runtimeExamples.other
+                  setForm({ ...form, deploy_mode: 'local', pre_cmd: examples.pre, deploy_cmd: examples.deploy, post_cmd: examples.post })
+                }}
+                className={selectCardCls(form.deploy_mode === 'local')}
               >
-                <X size={16} />
+                <div className="flex items-center gap-2 mb-1">
+                  <div className={`w-2 h-2 rounded-full ${form.deploy_mode === 'local' ? 'bg-amber-500' : 'bg-slate-300'}`} />
+                  <span className="font-semibold text-slate-800">本地化部署</span>
+                </div>
+                <p className="text-xs text-slate-500 ml-4">直接在服务器运行进程，通过 systemd 或 nohup 管理</p>
+              </button>
+              <button
+                onClick={() => setForm({ ...form, deploy_mode: 'container', pre_cmd: '', deploy_cmd: '', post_cmd: '' })}
+                className={selectCardCls(form.deploy_mode === 'container')}
+              >
+                <div className="flex items-center gap-2 mb-1">
+                  <div className={`w-2 h-2 rounded-full ${form.deploy_mode === 'container' ? 'bg-amber-500' : 'bg-slate-300'}`} />
+                  <span className="font-semibold text-slate-800">容器化部署</span>
+                </div>
+                <p className="text-xs text-slate-500 ml-4">使用 docker-compose 构建并运行容器</p>
               </button>
             </div>
-            <div className="px-4 py-2 bg-slate-50 border-b border-slate-200">
-              <div className="text-xs text-slate-500 truncate">当前：{currentDir}</div>
-            </div>
-            <div className="flex-1 overflow-y-auto p-2">
-              {dirLoading ? (
-                <div className="p-4 text-center text-sm text-slate-400">加载中...</div>
-              ) : (
-                <div className="space-y-0.5">
-                  {currentDir !== '/' && (
-                    <button
-                      onClick={() => loadDirEntries(currentDir.split('/').slice(0, -1).join('/') || '/')}
-                      className="w-full text-left px-3 py-2 text-sm text-slate-600 hover:bg-slate-100 rounded-md"
+
+            {form.deploy_mode === 'local' && (
+              <div className="space-y-5 bg-slate-50/50 rounded-xl border border-slate-100 p-5">
+                {/* 第 1 行：运行环境 + 执行方式 */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <div>
+                    <label className={labelCls}>运行环境 / 技术栈</label>
+                    <select
+                      value={localConfig.runtime_env}
+                      onChange={(e) => {
+                        const newRuntime = e.target.value
+                        const examples = runtimeExamples[newRuntime] || runtimeExamples.other
+                        setLocalConfig({ ...localConfig, runtime_env: newRuntime })
+                        setForm({ ...form, pre_cmd: examples.pre, deploy_cmd: examples.deploy, post_cmd: examples.post })
+                      }}
+                      className={inputCls}
                     >
-                      📁 ../
+                      <option value="nodejs">Node.js</option>
+                      <option value="python">Python</option>
+                      <option value="java">Java</option>
+                      <option value="go">Go</option>
+                      <option value="php">PHP</option>
+                      <option value="ruby">Ruby</option>
+                      <option value="dotnet">.NET</option>
+                      <option value="other">其他</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className={labelCls}>执行方式</label>
+                    <select
+                      value={localConfig.exec_type}
+                      onChange={(e) => setLocalConfig({ ...localConfig, exec_type: e.target.value as any })}
+                      className={inputCls}
+                    >
+                      <option value="direct">直接执行（阻塞）</option>
+                      <option value="background">后台运行（nohup）</option>
+                      <option value="systemd">systemd 服务管理</option>
+                    </select>
+                  </div>
+                </div>
+
+                {/* 命令参考提示 */}
+                <RuntimeEnvHint runtime={localConfig.runtime_env} />
+
+                {/* 第 2 行：预部署/部署/后部署 命令 */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                  <div>
+                    <label className={labelCls}>
+                      预部署命令
+                      <span className="text-slate-400 font-normal ml-1">(可选)</span>
+                    </label>
+                    <textarea
+                      value={form.pre_cmd}
+                      onChange={(e) => setForm({ ...form, pre_cmd: e.target.value })}
+                      className={textareaCls}
+                      rows={3}
+                      placeholder="npm install && npm run build"
+                    />
+                  </div>
+                  <div>
+                    <label className={labelCls}>部署命令</label>
+                    <textarea
+                      value={form.deploy_cmd}
+                      onChange={(e) => setForm({ ...form, deploy_cmd: e.target.value })}
+                      className={textareaCls}
+                      rows={3}
+                      placeholder="npm start"
+                    />
+                  </div>
+                  <div>
+                    <label className={labelCls}>
+                      后部署命令
+                      <span className="text-slate-400 font-normal ml-1">(可选)</span>
+                    </label>
+                    <textarea
+                      value={form.post_cmd}
+                      onChange={(e) => setForm({ ...form, post_cmd: e.target.value })}
+                      className={textareaCls}
+                      rows={3}
+                      placeholder="curl -f http://localhost:3000/health"
+                    />
+                  </div>
+                </div>
+
+                {/* 环境管理工具 */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <div>
+                    <label className={labelCls}>环境管理工具</label>
+                    <select
+                      value={localConfig.env_manager}
+                      onChange={(e) =>
+                        setLocalConfig({
+                          ...localConfig,
+                          env_manager: e.target.value as any,
+                          env_manager_env: '',
+                        })
+                      }
+                      className={inputCls}
+                    >
+                      <option value="none">不使用</option>
+                      <option value="nvm">nvm（Node 版本管理）</option>
+                      <option value="conda">conda（Python 环境）</option>
+                      <option value="pyenv">pyenv（Python 版本管理）</option>
+                    </select>
+                  </div>
+
+                  {localConfig.env_manager !== 'none' && (
+                    <div>
+                      <label className={labelCls}>
+                        {localConfig.env_manager === 'nvm'
+                          ? 'Node 版本'
+                          : localConfig.env_manager === 'conda'
+                          ? 'conda 环境名'
+                          : 'Python 版本'}
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <select
+                          value={localConfig.env_manager_env}
+                          onChange={(e) => setLocalConfig({ ...localConfig, env_manager_env: e.target.value })}
+                          className={inputCls}
+                          disabled={availableEnvs.length === 0}
+                        >
+                          <option value="">
+                            {availableEnvs.length === 0 ? '请先检查服务器环境' : '请选择环境'}
+                          </option>
+                          {availableEnvs.map((env) => (
+                            <option key={env} value={env}>{env}</option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          onClick={() => setShowAddEnv(!showAddEnv)}
+                          className="px-3 py-2 text-xs whitespace-nowrap bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors"
+                        >
+                          {showAddEnv ? '取消' : '新增'}
+                        </button>
+                      </div>
+                      {showAddEnv && (
+                        <div className="mt-2 flex items-center gap-2">
+                          <input
+                            type="text"
+                            value={newEnvName}
+                            onChange={(e) => setNewEnvName(e.target.value)}
+                            className={inputCls}
+                            placeholder={
+                              localConfig.env_manager === 'nvm'
+                                ? '如：18.0.0'
+                                : localConfig.env_manager === 'conda'
+                                ? '如：tf-gpu'
+                                : '如：3.11.0'
+                            }
+                          />
+                          <button
+                            type="button"
+                            onClick={handleCreateEnv}
+                            disabled={creatingEnv}
+                            className="px-3 py-2 text-xs whitespace-nowrap bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50"
+                          >
+                            {creatingEnv ? '创建中...' : '创建'}
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* 高级选项：折叠 */}
+                <details className="group">
+                  <summary className="text-xs font-medium text-slate-500 cursor-pointer hover:text-slate-700 transition-colors select-none">
+                    高级选项
+                  </summary>
+                  <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-5">
+                    {localConfig.exec_type === 'systemd' && (
+                      <>
+                        <div>
+                          <label className={labelCls}>服务名称</label>
+                          <input
+                            type="text"
+                            value={localConfig.service_name}
+                            onChange={(e) => setLocalConfig({ ...localConfig, service_name: e.target.value })}
+                            className={inputCls}
+                            placeholder={form.name || 'my-service'}
+                          />
+                        </div>
+                        <div>
+                          <label className={labelCls}>运行用户</label>
+                          <input
+                            type="text"
+                            value={localConfig.run_user}
+                            onChange={(e) => setLocalConfig({ ...localConfig, run_user: e.target.value })}
+                            className={inputCls}
+                          />
+                        </div>
+                      </>
+                    )}
+                    <div className="flex items-end pb-1">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={localConfig.skip_pre_cmd}
+                          onChange={(e) => setLocalConfig({ ...localConfig, skip_pre_cmd: e.target.checked })}
+                          className="w-4 h-4 rounded border-slate-300 text-amber-600 focus:ring-amber-500"
+                        />
+                        <span className="text-sm text-slate-600">跳过预部署命令</span>
+                      </label>
+                    </div>
+                  </div>
+                </details>
+              </div>
+            )}
+
+            {form.deploy_mode === 'container' && (
+              <div className="space-y-5 bg-slate-50/50 rounded-xl border border-slate-100 p-5">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                  <div>
+                    <label className={labelCls}>Compose 文件路径</label>
+                    <input
+                      type="text"
+                      value={containerConfig.compose_file}
+                      onChange={(e) => setContainerConfig({ ...containerConfig, compose_file: e.target.value })}
+                      className={inputCls}
+                      placeholder="docker-compose.yml"
+                    />
+                  </div>
+                  <div>
+                    <label className={labelCls}>构建命令</label>
+                    <input
+                      type="text"
+                      value={containerConfig.build_cmd}
+                      onChange={(e) => setContainerConfig({ ...containerConfig, build_cmd: e.target.value })}
+                      className={inputCls}
+                      placeholder="docker-compose build"
+                    />
+                  </div>
+                  <div>
+                    <label className={labelCls}>启动命令</label>
+                    <input
+                      type="text"
+                      value={containerConfig.up_cmd}
+                      onChange={(e) => setContainerConfig({ ...containerConfig, up_cmd: e.target.value })}
+                      className={inputCls}
+                      placeholder="docker-compose up -d"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+          </Section>
+        </div>
+
+        {/* ── 卡片：部署操作（仅编辑模式） ── */}
+        {isEdit && (
+          <div ref={deployRef} id="section-deploy" className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+            <Section title="部署操作">
+              {/* 上一次成功部署 */}
+              {latestSuccessTask && (
+                <div className="bg-green-50/50 border border-green-100 rounded-xl p-4 mb-5">
+                  <div className="flex items-center gap-2 mb-2">
+                    <div className="w-2 h-2 bg-green-500 rounded-full" />
+                    <span className="text-sm font-medium text-green-800">上一次成功部署</span>
+                    <span className="text-xs text-green-600 font-mono">#{latestSuccessTask.id}</span>
+                  </div>
+                  <div className="grid grid-cols-3 gap-4 text-xs text-green-700">
+                    <div>分支：<span className="font-mono">{latestSuccessTask.branch}</span></div>
+                    <div>时间：{formatTimeText(latestSuccessTask.ended_at || latestSuccessTask.created_at)}</div>
+                    {latestSuccessTask.commit_sha && (
+                      <div>Commit：<span className="font-mono">{latestSuccessTask.commit_sha.slice(0, 8)}</span></div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* 部署控制 */}
+              <div className="flex items-end gap-4">
+                <div className="flex-1">
+                  <label className={labelCls}>选择部署分支</label>
+                  <div className="flex items-center gap-2 mt-1">
+                    <select
+                      value={branch}
+                      onChange={(e) => setBranch(e.target.value)}
+                      className={inputCls}
+                      disabled={branches.length === 0}
+                    >
+                      <option value="">
+                        {branchesLoading ? '加载分支中...' : branches.length === 0 ? '保存后加载分支' : '选择分支'}
+                      </option>
+                      {branches.map((b) => (
+                        <option key={b} value={b}>{b}</option>
+                      ))}
+                    </select>
+                    <button
+                      onClick={async () => {
+                        setBranchesLoading(true)
+                        try {
+                          const res = await projectApi.branches(projectId)
+                          setBranches(res.data.data?.branches || [])
+                        } catch (e: any) {
+                          setError(e.response?.data?.message || '加载分支列表失败')
+                        } finally {
+                          setBranchesLoading(false)
+                        }
+                      }}
+                      disabled={branchesLoading}
+                      className="px-3 py-2 text-slate-500 hover:text-slate-700 hover:bg-slate-50 border border-slate-300 rounded-lg transition-colors"
+                      title="刷新分支列表"
+                    >
+                      <RotateCcw size={16} className={branchesLoading ? 'animate-spin' : ''} />
+                    </button>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 pb-0.5">
+                  <button
+                    onClick={handleDeploy}
+                    disabled={deploying || !branch}
+                    className="flex items-center gap-2 px-5 py-2 text-sm font-medium bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors disabled:opacity-50 shadow-sm"
+                  >
+                    <Play size={16} />
+                    {deploying ? '部署中...' : '开始部署'}
+                  </button>
+                  {deploying && (
+                    <button
+                      onClick={handleCancel}
+                      className="px-3 py-2 text-sm font-medium text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
+                    >
+                      取消
                     </button>
                   )}
-                  {dirEntries.map((entry) => (
-                    <div key={entry.path} className="flex items-center gap-2">
+                  {taskId && status !== 'running' && (
+                    <button
+                      onClick={handleDownload}
+                      className="flex items-center gap-1 px-3 py-2 text-sm text-slate-600 border border-slate-200 rounded-lg hover:bg-slate-50 transition-colors"
+                    >
+                      <Download size={14} />
+                      下载日志
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* 状态指示器 */}
+              {status !== 'idle' && (
+                <div className={`mt-4 inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium ${statusColor[status]}`}>
+                  <span className={`w-1.5 h-1.5 rounded-full ${statusDot[status]}`} />
+                  {statusText[status]}
+                </div>
+              )}
+
+              {/* 部署日志 */}
+              {logs.length > 0 && (
+                <div ref={logSectionRef} className="mt-5">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-slate-700">部署日志</span>
+                      {connected && <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse" title="实时连接中" />}
+                    </div>
+                    <div className="flex items-center gap-1">
                       <button
-                        onClick={() => loadDirEntries(entry.path)}
-                        className="flex-1 text-left px-3 py-2 text-sm text-slate-700 hover:bg-slate-100 rounded-md"
+                        onClick={() => setShowLog(!showLog)}
+                        className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-md transition-colors"
+                        title={showLog ? '折叠日志' : '展开日志'}
                       >
-                        📁 {entry.name}
+                        {showLog ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
                       </button>
                       <button
-                        onClick={() => selectDir(entry.path)}
-                        className="px-2 py-1 text-xs bg-amber-50 text-amber-700 rounded hover:bg-amber-100"
+                        onClick={scrollLogToTop}
+                        className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-md transition-colors"
+                        title="滚动到顶部"
                       >
-                        选择
+                        <ArrowUp size={16} />
                       </button>
                     </div>
-                  ))}
-                  {dirEntries.length === 0 && currentDir === '/' && (
-                    <div className="p-4 text-center text-sm text-slate-400">暂无子目录</div>
+                  </div>
+                  {showLog && (
+                    <div className="bg-slate-900 text-slate-100 rounded-xl p-4 font-mono text-xs leading-relaxed max-h-96 overflow-y-auto">
+                      {logs.map((line, i) => (
+                        <div key={i} className="whitespace-pre-wrap break-all">
+                          <span className="text-slate-600 mr-2 select-none">{String(i + 1).padStart(3, ' ')}</span>
+                          {line}
+                        </div>
+                      ))}
+                      <div ref={logsEndRef} />
+                    </div>
                   )}
                 </div>
               )}
-            </div>
-            <div className="flex items-center justify-between px-4 py-3 border-t border-slate-200">
-              <button
-                onClick={() => selectDir(currentDir)}
-                className="px-3 py-1.5 text-sm bg-amber-600 text-white rounded-md hover:bg-amber-700"
-              >
-                使用当前目录
-              </button>
-              <button
-                onClick={() => setShowDirPicker(false)}
-                className="px-3 py-1.5 text-sm text-slate-600 hover:bg-slate-50 rounded-md"
-              >
-                取消
-              </button>
-            </div>
+            </Section>
+          </div>
+        )}
+
+        {/* ── 底部导航 ── */}
+        <div className="flex items-center justify-between py-4">
+          <div className="text-xs text-slate-400">
+            {isEdit ? '修改后记得点击保存按钮' : '创建项目后可在编辑页面进行部署操作'}
+          </div>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => navigate('/projects')}
+              className="px-4 py-2 text-sm text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors"
+            >
+              返回
+            </button>
+            <button
+              onClick={handleSaveClick}
+              disabled={saving}
+              className="flex items-center gap-2 px-5 py-2 text-sm font-medium bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors disabled:opacity-50 shadow-sm"
+            >
+              <Save size={16} />
+              {saving ? '保存中...' : '保存项目'}
+            </button>
           </div>
         </div>
-      )}
+
+      </div>
     </div>
   )
 }
+

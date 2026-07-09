@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/linux-deploy-manager/internal/crypto"
 	"github.com/linux-deploy-manager/internal/deployer"
 	"github.com/linux-deploy-manager/internal/git"
 	"github.com/linux-deploy-manager/internal/model"
@@ -142,8 +141,8 @@ func (s *TaskService) createExecutor(project *model.Project) (deployer.Executor,
 	if err != nil {
 		return nil, fmt.Errorf("get server node %d: %w", *project.ServerNodeID, err)
 	}
-	if node.Status != "online" {
-		return nil, fmt.Errorf("目标服务器 %s 离线，无法部署", node.Name)
+	if node.Status != "online" && node.Status != "unknown" {
+		return nil, fmt.Errorf("目标服务器 %s 状态异常（%s），无法部署", node.Name, node.Status)
 	}
 
 	client, err := s.sshPool.GetOrCreate(node.ID, func() (*sshclient.Client, error) {
@@ -158,14 +157,7 @@ func (s *TaskService) createExecutor(project *model.Project) (deployer.Executor,
 
 // createSSHClient 根据服务器节点配置创建 SSH 客户端
 func (s *TaskService) createSSHClient(node *model.ServerNode) (*sshclient.Client, error) {
-	password := node.Password
-	if password != "" && node.AuthType == "password" {
-		decrypted, err := crypto.Decrypt(password)
-		if err == nil {
-			password = string(decrypted)
-		}
-	}
-	return sshclient.NewClientFromNode(node, password, s.keyRepo)
+	return sshclient.NewClientFromNode(node, s.keyRepo)
 }
 
 // CancelDeploy 取消部署
