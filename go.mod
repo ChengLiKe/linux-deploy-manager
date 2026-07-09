@@ -1,6 +1,6 @@
 module github.com/linux-deploy-manager
 
-go 1.25.0
+go 1.22
 
 require (
 	github.com/gin-gonic/gin v1.10.0
@@ -10,7 +10,7 @@ require (
 	github.com/pkg/sftp v1.13.7
 	github.com/stretchr/testify v1.9.0
 	golang.org/x/crypto v0.27.0
-	golang.org/x/sync v0.22.0
+	golang.org/x/sync v0.8.0
 	gorm.io/gorm v1.25.12
 )
 
