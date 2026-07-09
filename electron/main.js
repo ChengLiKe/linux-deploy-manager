@@ -344,8 +344,6 @@ function createWindow() {
 }
 
 // ── IPC 处理器 ────────────────────────────────────
-ipcMain.handle('get-backend-port', () => backendPort);
-
 ipcMain.handle('set-close-behavior', (_event, behavior) => {
   global.closeBehavior = behavior;
 });
