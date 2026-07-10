@@ -34,3 +34,16 @@ func DetachProcess(cmd *exec.Cmd) {
 		CreationFlags: syscall.CREATE_NEW_PROCESS_GROUP | 0x00000008, // DETACHED_PROCESS
 	}
 }
+
+// ProcAttr 返回进程属性（Windows 上无需特殊设置）
+func ProcAttr() *syscall.SysProcAttr {
+	return nil
+}
+
+// TerminateProcess 终止进程（Windows 使用 TerminateProcess）
+func TerminateProcess(cmd *exec.Cmd) error {
+	if cmd == nil || cmd.Process == nil {
+		return nil
+	}
+	return cmd.Process.Kill()
+}

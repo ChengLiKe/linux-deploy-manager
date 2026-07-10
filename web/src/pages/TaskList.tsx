@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Eye, Download } from 'lucide-react'
+import Select from '../components/Select'
 
 export default function TaskList() {
   const [tasks] = useState<any[]>([])
@@ -14,8 +15,15 @@ export default function TaskList() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold text-slate-800">部署历史</h2>
+      <div>
+        <div className="flex items-center gap-1.5 text-xs text-slate-400 mb-1">
+          <span>首页</span>
+          <span>/</span>
+          <span className="text-slate-600 font-medium">部署历史</span>
+        </div>
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-bold text-slate-800">部署历史</h2>
+        </div>
       </div>
 
       <div className="flex gap-3">
@@ -26,15 +34,14 @@ export default function TaskList() {
           onChange={(e) => setFilter({ ...filter, branch: e.target.value })}
           className="px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
         />
-        <select
+        <Select
           value={filter.status}
-          onChange={(e) => setFilter({ ...filter, status: e.target.value })}
-          className="px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
+          onChange={(val) => setFilter({ ...filter, status: val })}
         >
           {statuses.map((s) => (
             <option key={s.value} value={s.value}>{s.label}</option>
           ))}
-        </select>
+        </Select>
       </div>
 
       <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">

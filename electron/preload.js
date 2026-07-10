@@ -26,10 +26,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // ── 自动更新 API ────────────────────────────────
   /** 手动检查更新 */
   checkForUpdate: () => ipcRenderer.invoke('check-for-update'),
-
   /** 开始下载更新 */
   downloadUpdate: () => ipcRenderer.invoke('download-update'),
-
   /** 立即安装更新 */
   installUpdate: () => ipcRenderer.invoke('install-update'),
 
@@ -55,4 +53,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       });
     };
   },
+
+  // ── 文件对话框 ──────────────────────────────────
+  /** 打开文件夹选择器，返回选中路径或 null */
+  selectDirectory: () => ipcRenderer.invoke('select-directory'),
 });

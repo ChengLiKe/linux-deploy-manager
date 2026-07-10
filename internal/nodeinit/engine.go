@@ -88,7 +88,7 @@ func (e *InitEngine) Execute(ctx context.Context, client *sshclient.Client, node
 		} else {
 			// 执行回滚
 			result.Status = "rolled_back"
-			e.rollback(ctx, client, node.ID, phases, rollbackStack)
+			e.logRollback(ctx, client, node.ID, phases, rollbackStack)
 			e.updateNodeStatus(node.ID, "init_failed")
 			return result
 		}
@@ -219,8 +219,10 @@ func (e *InitEngine) executeStep(ctx context.Context, client *sshclient.Client, 
 	}
 }
 
-// rollback 回滚已成功的阶段
-func (e *InitEngine) rollback(ctx context.Context, client *sshclient.Client, nodeID uint, phases []PhaseConfig, successIndices []int) {
+// logRollback 记录已成功步骤的回滚日志
+// TODO: 当前仅标记回滚状态，未执行实际的卸载/清理操作。如需真正的回滚，
+// 应为每个 Step 实现 RollbackCommand，在此处远程执行。
+func (e *InitEngine) logRollback(ctx context.Context, client *sshclient.Client, nodeID uint, phases []PhaseConfig, successIndices []int) {
 	// 从后往前回滚
 	for i := len(successIndices) - 1; i >= 0; i-- {
 		idx := successIndices[i]

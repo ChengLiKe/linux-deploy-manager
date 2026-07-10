@@ -1,19 +1,36 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { Link } from 'react-router-dom'
-import { Plus, Trash2, Rocket, RotateCcw, Clock, Terminal } from 'lucide-react'
+import { Plus, Trash2, Rocket, RotateCcw, Clock, FolderOpen, GitBranch, X, Pencil, Check } from 'lucide-react'
 import { projectApi, type ProjectItem } from '../utils/api'
-import DeployModal from '../components/DeployModal'
 import HistoryDrawer from '../components/HistoryDrawer'
-import InstanceLogModal from '../components/InstanceLogModal'
 
 export default function ProjectList() {
   const [items, setItems] = useState<ProjectItem[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
-  const [deployTarget, setDeployTarget] = useState<{ id: number; name: string; mode: string; latest: any } | null>(null)
   const [historyTarget, setHistoryTarget] = useState<{ id: number; name: string } | null>(null)
-  const [logTarget, setLogTarget] = useState<{ id: number; name: string } | null>(null)
+
+  // Create dropdown
+  const [showCreateDropdown, setShowCreateDropdown] = useState(false)
+  const dropdownRef = useRef<HTMLDivElement>(null)
+
+  // Folder import (browser mode)
+  const [showFolderModal, setShowFolderModal] = useState(false)
+  const [folderPath, setFolderPath] = useState('')
+
+  // Git import modal
+  const [showGitModal, setShowGitModal] = useState(false)
+  const [gitUrl, setGitUrl] = useState('')
+
+  // Shared submission state
+  const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState('')
+
+  // Inline rename
+  const [renamingId, setRenamingId] = useState<number | null>(null)
+  const [renameValue, setRenameValue] = useState('')
+  const renameInputRef = useRef<HTMLInputElement>(null)
 
   const fetchProjects = async () => {
     setLoading(true)
@@ -32,6 +49,27 @@ export default function ProjectList() {
     fetchProjects()
   }, [])
 
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setShowCreateDropdown(false)
+      }
+    }
+    if (showCreateDropdown) {
+      document.addEventListener('mousedown', handler)
+    }
+    return () => document.removeEventListener('mousedown', handler)
+  }, [showCreateDropdown])
+
+  // Focus rename input when it appears
+  useEffect(() => {
+    if (renamingId !== null && renameInputRef.current) {
+      renameInputRef.current.focus()
+      renameInputRef.current.select()
+    }
+  }, [renamingId])
+
   const handleDelete = async (id: number) => {
     if (!confirm('确定要删除这个项目吗？')) return
     try {
@@ -39,6 +77,109 @@ export default function ProjectList() {
       fetchProjects()
     } catch (err: any) {
       setError(err.response?.data?.message || '删除失败')
+    }
+  }
+
+  // ── Folder import ──
+  const handleImportFolderClick = async () => {
+    setShowCreateDropdown(false)
+    if (window.electronAPI) {
+      // Electron mode: native folder picker
+      const folder = await window.electronAPI.selectDirectory()
+      if (!folder) return
+      setSubmitting(true)
+      setSubmitError('')
+      try {
+        await projectApi.importFolder(folder)
+        fetchProjects()
+      } catch (err: any) {
+        setSubmitError(err.response?.data?.message || '导入失败')
+      } finally {
+        setSubmitting(false)
+      }
+    } else {
+      // Browser mode: show modal
+      setFolderPath('')
+      setSubmitError('')
+      setShowFolderModal(true)
+    }
+  }
+
+  const handleFolderConfirm = async () => {
+    if (!folderPath.trim()) return
+    setSubmitting(true)
+    setSubmitError('')
+    try {
+      await projectApi.importFolder(folderPath.trim())
+      setShowFolderModal(false)
+      setFolderPath('')
+      fetchProjects()
+    } catch (err: any) {
+      setSubmitError(err.response?.data?.message || '导入失败')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  // ── Git import ──
+  const handleImportGitClick = () => {
+    setShowCreateDropdown(false)
+    setGitUrl('')
+    setSubmitError('')
+    setShowGitModal(true)
+  }
+
+  const handleGitConfirm = async () => {
+    if (!gitUrl.trim()) return
+    setSubmitting(true)
+    setSubmitError('')
+    try {
+      await projectApi.importGit(gitUrl.trim())
+      setShowGitModal(false)
+      setGitUrl('')
+      fetchProjects()
+    } catch (err: any) {
+      setSubmitError(err.response?.data?.message || '导入失败')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  // ── Inline rename ──
+  const startRename = (id: number, name: string) => {
+    setRenamingId(id)
+    setRenameValue(name)
+  }
+
+  const cancelRename = () => {
+    setRenamingId(null)
+    setRenameValue('')
+  }
+
+  const saveRename = async () => {
+    const id = renamingId
+    if (id === null) return
+    const trimmed = renameValue.trim()
+    if (!trimmed) {
+      cancelRename()
+      return
+    }
+    try {
+      await projectApi.patch(id, { name: trimmed })
+      setRenamingId(null)
+      setRenameValue('')
+      fetchProjects()
+    } catch (err: any) {
+      setError(err.response?.data?.message || '重命名失败')
+      cancelRename()
+    }
+  }
+
+  const handleRenameKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      saveRename()
+    } else if (e.key === 'Escape') {
+      cancelRename()
     }
   }
 
@@ -60,13 +201,36 @@ export default function ProjectList() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-bold text-slate-800">项目</h2>
-        <Link
-          to="/projects/new"
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors text-sm"
-        >
-          <Plus size={15} />
-          创建项目
-        </Link>
+
+        {/* Create button dropdown */}
+        <div className="relative" ref={dropdownRef}>
+          <button
+            onClick={() => setShowCreateDropdown((v) => !v)}
+            className="flex items-center gap-1.5 px-3 py-1.5 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors text-sm"
+          >
+            <Plus size={15} />
+            创建项目
+          </button>
+
+          {showCreateDropdown && (
+            <div className="absolute right-0 top-full mt-1 w-48 bg-white border border-slate-200 rounded-lg shadow-lg z-50 py-1 text-sm">
+              <button
+                onClick={handleImportFolderClick}
+                className="flex items-center gap-2 w-full px-3 py-2 text-slate-700 hover:bg-slate-50 transition-colors"
+              >
+                <FolderOpen size={15} />
+                从文件夹导入
+              </button>
+              <button
+                onClick={handleImportGitClick}
+                className="flex items-center gap-2 w-full px-3 py-2 text-slate-700 hover:bg-slate-50 transition-colors"
+              >
+                <GitBranch size={15} />
+                从Git导入
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {error && (
@@ -74,12 +238,17 @@ export default function ProjectList() {
           {error}
         </div>
       )}
+      {submitError && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-lg text-xs">
+          {submitError}
+        </div>
+      )}
 
       {loading ? (
         <div className="text-sm text-slate-500 py-4 text-center">加载中...</div>
       ) : items.length === 0 ? (
         <div className="bg-white rounded-xl border border-slate-200 p-6 text-center text-slate-400 text-sm">
-          暂无项目，点击右上角"创建项目"开始
+          你的项目列表比脸还干净 😄 快去右上角「创建项目」打破这份宁静吧！
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -91,17 +260,47 @@ export default function ProjectList() {
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
-                      <h3 className="font-semibold text-slate-800 text-sm truncate">{p.name}</h3>
-                      <span className={`px-1.5 py-0.5 text-[10px] rounded-full shrink-0 ${p.status === 'active' ? 'bg-green-50 text-green-600' : 'bg-slate-100 text-slate-500'}`}>
-                        {p.status === 'active' ? '活跃' : '草稿'}
-                      </span>
+                      {renamingId === p.id ? (
+                        <div className="flex items-center gap-1">
+                          <input
+                            ref={renameInputRef}
+                            type="text"
+                            value={renameValue}
+                            onChange={(e) => setRenameValue(e.target.value)}
+                            onKeyDown={handleRenameKeyDown}
+                            onBlur={saveRename}
+                            className="text-sm font-semibold text-slate-800 border border-amber-300 rounded px-1 py-0.5 w-32 outline-none focus:ring-1 focus:ring-amber-400"
+                          />
+                          <button
+                            onClick={saveRename}
+                            className="p-0.5 text-green-600 hover:text-green-700"
+                            title="保存"
+                          >
+                            <Check size={13} />
+                          </button>
+                          <button
+                            onClick={cancelRename}
+                            className="p-0.5 text-slate-400 hover:text-slate-600"
+                            title="取消"
+                          >
+                            <X size={13} />
+                          </button>
+                        </div>
+                      ) : (
+                        <h3
+                          className="font-semibold text-slate-800 text-sm truncate cursor-pointer hover:text-amber-700 flex items-center gap-1"
+                          onClick={() => startRename(p.id, p.name)}
+                        >
+                          {p.name}
+                          <Pencil size={11} className="text-slate-300 hover:text-slate-500 shrink-0" />
+                        </h3>
+                      )}
                     </div>
                     <p className="text-xs text-slate-400 mt-0.5 truncate">{p.description || '暂无描述'}</p>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-2 text-xs text-slate-400">
-                  <span className="px-1.5 py-0.5 bg-slate-50 rounded text-[11px]">{p.deploy_mode === 'local' ? '本地化' : '容器化'}</span>
                   {latest ? (
                     <>
                       <span className={`px-1.5 py-0.5 rounded text-[11px] ${status?.cls}`}>{status?.label}</span>
@@ -114,13 +313,13 @@ export default function ProjectList() {
                 </div>
 
                 <div className="flex items-center gap-1.5">
-                  <button
-                    onClick={() => setDeployTarget({ id: p.id, name: p.name, mode: p.deploy_mode, latest })}
+                  <Link
+                    to={`/deployments?project_id=${p.id}`}
                     className="flex-1 flex items-center justify-center gap-1 py-1.5 bg-amber-50 text-amber-700 rounded-lg hover:bg-amber-100 transition-colors text-xs"
                   >
                     {hasSuccess ? <RotateCcw size={12} /> : <Rocket size={12} />}
                     {hasSuccess ? '重新部署' : '部署'}
-                  </button>
+                  </Link>
                   <Link
                     to={`/projects/${p.id}/edit`}
                     className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-50 rounded-lg"
@@ -145,13 +344,6 @@ export default function ProjectList() {
                     <Clock size={11} />
                     部署历史
                   </button>
-                  <button
-                    onClick={() => setLogTarget({ id: p.id, name: p.name })}
-                    className="flex items-center gap-1 text-[11px] text-slate-400 hover:text-blue-600 transition-colors"
-                  >
-                    <Terminal size={11} />
-                    实例日志
-                  </button>
                 </div>
               </div>
             )
@@ -159,15 +351,88 @@ export default function ProjectList() {
         </div>
       )}
 
-      {deployTarget && (
-        <DeployModal
-          projectId={deployTarget.id}
-          projectName={deployTarget.name}
-          deployMode={deployTarget.mode}
-          latestTask={deployTarget.latest}
-          onClose={() => setDeployTarget(null)}
-          onDeployComplete={() => fetchProjects()}
-        />
+      {/* ── Folder import modal (browser mode) ── */}
+      {showFolderModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 p-6 space-y-4">
+            <h3 className="text-base font-semibold text-slate-800">从文件夹导入</h3>
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">文件夹路径</label>
+              <input
+                type="text"
+                value={folderPath}
+                onChange={(e) => setFolderPath(e.target.value)}
+                placeholder="/home/user/project"
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-amber-400 focus:border-amber-400"
+                disabled={submitting}
+                onKeyDown={(e) => e.key === 'Enter' && handleFolderConfirm()}
+              />
+            </div>
+            {submitError && (
+              <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-lg text-xs">
+                {submitError}
+              </div>
+            )}
+            <div className="flex items-center justify-end gap-2">
+              <button
+                onClick={() => { setShowFolderModal(false); setSubmitError('') }}
+                className="px-4 py-1.5 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                disabled={submitting}
+              >
+                取消
+              </button>
+              <button
+                onClick={handleFolderConfirm}
+                disabled={submitting || !folderPath.trim()}
+                className="px-4 py-1.5 text-sm bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50 transition-colors"
+              >
+                {submitting ? '导入中...' : '确认'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Git import modal ── */}
+      {showGitModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 p-6 space-y-4">
+            <h3 className="text-base font-semibold text-slate-800">从 Git 导入项目</h3>
+            <div>
+              <label className="block text-xs text-slate-500 mb-1">Git 仓库地址</label>
+              <input
+                type="text"
+                value={gitUrl}
+                onChange={(e) => setGitUrl(e.target.value)}
+                placeholder="git@github.com:owner/repo.git"
+                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-amber-400 focus:border-amber-400"
+                disabled={submitting}
+                onKeyDown={(e) => e.key === 'Enter' && handleGitConfirm()}
+              />
+            </div>
+            {submitError && (
+              <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-lg text-xs">
+                {submitError}
+              </div>
+            )}
+            <div className="flex items-center justify-end gap-2">
+              <button
+                onClick={() => { setShowGitModal(false); setSubmitError('') }}
+                className="px-4 py-1.5 text-sm text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                disabled={submitting}
+              >
+                取消
+              </button>
+              <button
+                onClick={handleGitConfirm}
+                disabled={submitting || !gitUrl.trim()}
+                className="px-4 py-1.5 text-sm bg-amber-600 text-white rounded-lg hover:bg-amber-700 disabled:opacity-50 transition-colors"
+              >
+                {submitting ? '导入中...' : '确认'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {historyTarget && (
@@ -175,14 +440,6 @@ export default function ProjectList() {
           projectId={historyTarget.id}
           projectName={historyTarget.name}
           onClose={() => setHistoryTarget(null)}
-        />
-      )}
-
-      {logTarget && (
-        <InstanceLogModal
-          projectId={logTarget.id}
-          projectName={logTarget.name}
-          onClose={() => setLogTarget(null)}
         />
       )}
     </div>

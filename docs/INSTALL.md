@@ -38,7 +38,7 @@ sudo chmod +x /usr/local/bin/linux-deploy-manager
 ```bash
 sudo tee /etc/systemd/system/linux-deploy-manager.service << 'EOF'
 [Unit]
-Description=Linux 部署管家
+Description=开发管理器
 After=network-online.target
 Wants=network-online.target
 

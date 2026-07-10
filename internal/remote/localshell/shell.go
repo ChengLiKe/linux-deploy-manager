@@ -4,6 +4,8 @@ import (
 	"io"
 	"os/exec"
 	"runtime"
+
+	"github.com/linux-deploy-manager/internal/sysutil"
 )
 
 // Shell 本地 Shell 进程，提供与 SSH ShellSession 兼容的接口
@@ -21,6 +23,8 @@ func New() (*Shell, error) {
 		cmd = exec.Command("cmd.exe")
 	} else {
 		cmd = exec.Command("bash")
+		// Unix 上设置进程组，确保 Kill 时子进程一并终止
+		cmd.SysProcAttr = sysutil.ProcAttr()
 	}
 
 	stdin, err := cmd.StdinPipe()
@@ -66,7 +70,7 @@ func (s *Shell) Resize(rows, cols int) error {
 // Close 关闭 Shell 进程
 func (s *Shell) Close() error {
 	if s.cmd != nil && s.cmd.Process != nil {
-		return s.cmd.Process.Kill()
+		return sysutil.TerminateProcess(s.cmd)
 	}
 	return nil
 }

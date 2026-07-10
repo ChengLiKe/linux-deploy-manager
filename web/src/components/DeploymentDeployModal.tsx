@@ -1,33 +1,18 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { Play, Download, RotateCcw, ChevronDown, ChevronUp, X, ArrowUp } from 'lucide-react'
-import { projectApi, taskApi } from '../utils/api'
+import { Play, Download, ChevronDown, ChevronUp, X, ArrowUp } from 'lucide-react'
+import { deploymentApi, taskApi } from '../utils/api'
 import { useWebSocket } from '../hooks/useWebSocket'
 import Select from '../components/Select'
 
-interface DeployModalProps {
-  projectId: number
-  projectName: string
+interface DeploymentDeployModalProps {
+  deploymentId: number
+  deploymentName: string
   deployMode: string
-  latestTask?: {
-    id: number
-    status: string
-    branch: string
-    commit_sha?: string
-    created_at: string
-  } | null
   onClose: () => void
   onDeployComplete?: () => void
 }
 
-const statusMap: Record<string, { label: string; cls: string; dot: string }> = {
-  success: { label: '部署成功', cls: 'bg-green-50 text-green-600', dot: 'bg-green-500' },
-  failed: { label: '部署失败', cls: 'bg-red-50 text-red-600', dot: 'bg-red-500' },
-  running: { label: '部署中', cls: 'bg-blue-50 text-blue-600', dot: 'bg-blue-500 animate-pulse' },
-  pending: { label: '等待中', cls: 'bg-amber-50 text-amber-600', dot: 'bg-amber-500 animate-pulse' },
-  cancelled: { label: '已取消', cls: 'bg-slate-100 text-slate-500', dot: 'bg-slate-500' },
-}
-
-export default function DeployModal({ projectId, projectName, deployMode, latestTask, onClose, onDeployComplete }: DeployModalProps) {
+export default function DeploymentDeployModal({ deploymentId, deploymentName, deployMode, onClose, onDeployComplete }: DeploymentDeployModalProps) {
   const [branch, setBranch] = useState('')
   const [branches, setBranches] = useState<string[]>([])
   const [branchesLoading, setBranchesLoading] = useState(false)
@@ -39,9 +24,6 @@ export default function DeployModal({ projectId, projectName, deployMode, latest
   const logsEndRef = useRef<HTMLDivElement>(null)
   const logTopRef = useRef<HTMLDivElement>(null)
 
-  const hasPreviousSuccess = latestTask?.status === 'success'
-  const prevStatus = latestTask ? statusMap[latestTask.status] : null
-
   useEffect(() => {
     if (logsEndRef.current) {
       logsEndRef.current.scrollIntoView({ behavior: 'smooth' })
@@ -51,24 +33,20 @@ export default function DeployModal({ projectId, projectName, deployMode, latest
   const loadBranches = useCallback(async () => {
     setBranchesLoading(true)
     try {
-      const res = await projectApi.branches(projectId)
+      const res = await deploymentApi.branches(deploymentId)
       const list = res.data.data?.branches || []
       setBranches(list)
-      if (!branch && hasPreviousSuccess && latestTask?.branch && list.includes(latestTask.branch)) {
-        setBranch(latestTask.branch)
-      }
     } catch (err) {
       console.error('加载分支失败:', err)
     } finally {
       setBranchesLoading(false)
     }
-  }, [projectId, branch, hasPreviousSuccess, latestTask])
+  }, [deploymentId])
 
   useEffect(() => {
     loadBranches()
   }, [loadBranches])
 
-  // 使用相对路径，由 useWebSocket 自动解析为完整 WebSocket URL
   const wsUrl = taskId ? `/ws/deploy/${taskId}` : null
   const { connect, disconnect, connected } = useWebSocket(wsUrl, {
     onMessage: (line) => setLogs((prev) => [...prev, line]),
@@ -106,7 +84,7 @@ export default function DeployModal({ projectId, projectName, deployMode, latest
     setLogs([])
     setTaskId(null)
     try {
-      const res = await projectApi.deploy(projectId, branch)
+      const res = await deploymentApi.deploy(deploymentId, branch)
       const newTaskId = res.data.data?.task_id
       if (newTaskId) {
         setTaskId(newTaskId)
@@ -194,7 +172,7 @@ export default function DeployModal({ projectId, projectName, deployMode, latest
       >
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 shrink-0">
           <div>
-            <h3 className="font-semibold text-slate-800">{projectName}</h3>
+            <h3 className="font-semibold text-slate-800">{deploymentName}</h3>
             <p className="text-xs text-slate-400 mt-0.5">
               {deployMode === 'local' ? '本地化部署' : '容器化部署'}
             </p>
@@ -205,28 +183,6 @@ export default function DeployModal({ projectId, projectName, deployMode, latest
         </div>
 
         <div className="px-5 py-4 overflow-y-auto flex-1">
-          {hasPreviousSuccess && (
-            <div className="p-3 bg-green-50 border border-green-200 rounded-md mb-4">
-              <div className="text-xs text-green-700 font-medium mb-1">上一次成功部署</div>
-              <div className="grid grid-cols-3 gap-2 text-xs text-green-600">
-                <div>分支: <span className="font-mono text-green-800">{latestTask!.branch}</span></div>
-                <div>Commit: <span className="font-mono text-green-800">{latestTask!.commit_sha ? latestTask!.commit_sha.slice(0, 7) : '-'}</span></div>
-                <div>时间: <span>{new Date(latestTask!.created_at).toLocaleString()}</span></div>
-              </div>
-            </div>
-          )}
-
-          {latestTask && !hasPreviousSuccess && prevStatus && (
-            <div className="p-3 bg-slate-50 border border-slate-200 rounded-md mb-4">
-              <div className="text-xs text-slate-500 font-medium mb-1">最近一次部署</div>
-              <div className="grid grid-cols-3 gap-2 text-xs text-slate-500">
-                <div>状态: <span className={prevStatus.cls + ' px-1.5 py-0.5 rounded'}>{prevStatus.label}</span></div>
-                <div>分支: <span className="font-mono">{latestTask.branch}</span></div>
-                <div>时间: <span>{new Date(latestTask.created_at).toLocaleString()}</span></div>
-              </div>
-            </div>
-          )}
-
           <div className="space-y-3">
             <div className="flex gap-2">
               <div className="flex-1">
@@ -257,8 +213,8 @@ export default function DeployModal({ projectId, projectName, deployMode, latest
                 disabled={!branch || deploying}
                 className="flex items-center gap-1.5 px-4 py-2 text-sm bg-amber-600 text-white rounded-md hover:bg-amber-700 transition-colors disabled:opacity-50"
               >
-                {hasPreviousSuccess ? <RotateCcw size={14} /> : <Play size={14} />}
-                {deploying ? '部署中...' : hasPreviousSuccess ? '重新部署' : '确认部署'}
+                <Play size={14} />
+                {deploying ? '部署中...' : '确认部署'}
               </button>
               {status === 'running' && (
                 <button

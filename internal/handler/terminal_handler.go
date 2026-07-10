@@ -166,7 +166,7 @@ func (h *TerminalHandler) Handle(c *gin.Context) {
 	})
 
 	// 管道：WebSocket ← SSH stdout
-	errChan := make(chan error, 2)
+	errChan := make(chan error, 3)
 	go func() {
 		buf := make([]byte, 4096)
 		for {
@@ -196,6 +196,7 @@ func (h *TerminalHandler) Handle(c *gin.Context) {
 				data := buf[:n]
 				msg, _ := json.Marshal(gin.H{"type": "stderr", "data": string(data)})
 				if writeErr := ws.WriteMessage(websocket.TextMessage, msg); writeErr != nil {
+					errChan <- writeErr
 					return
 				}
 			}

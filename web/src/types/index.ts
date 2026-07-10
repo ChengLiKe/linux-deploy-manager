@@ -114,6 +114,8 @@ export interface ElectronAPI {
   downloadUpdate(): Promise<{ ok?: boolean; error?: string }>
   installUpdate(): Promise<{ ok?: boolean; error?: string }>
   onUpdateEvent(callback: (event: UpdateEvent) => void): () => void
+  // 文件对话框
+  selectDirectory(): Promise<string | null>
 }
 
 export interface UpdateEvent {
@@ -127,6 +129,47 @@ export interface UpdateEvent {
   transferred?: number
   message?: string
 }
+
+export interface Deployment {
+  id: number
+  name: string
+  project_id: number
+  server_node_id?: number
+  script_filename: string
+  deploy_mode: 'local' | 'container'
+  timeout_sec: number
+  container_config: string
+  local_config: string
+  env_format: string
+  env_content: string
+  code_dir: string
+  deploy_dir: string
+  default_branch: string
+  description: string
+  created_at: string
+  updated_at: string
+  project?: Project
+  server_node?: ServerNode
+}
+
+export interface CreateDeploymentRequest {
+  name: string
+  project_id: number
+  server_node_id?: number | null
+  deploy_mode?: 'local' | 'container'
+  script_filename?: string
+  timeout_sec?: number
+  container_config?: string
+  local_config?: string
+  env_format?: string
+  env_content?: string
+  code_dir?: string
+  deploy_dir?: string
+  default_branch?: string
+  description?: string
+}
+
+export type UpdateDeploymentRequest = Partial<CreateDeploymentRequest>
 
 declare global {
   interface Window {

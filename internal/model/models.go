@@ -66,21 +66,49 @@ type Project struct {
 	Tasks      []DeployTask `gorm:"foreignKey:ProjectID" json:"-"`
 }
 
+// Deployment 部署配置（关联项目和服务器）
+type Deployment struct {
+	ID              uint       `gorm:"primaryKey" json:"id"`
+	Name            string     `gorm:"size:100;not null" json:"name"`
+	ProjectID       uint       `gorm:"not null;index" json:"project_id"`
+	ServerNodeID    *uint      `json:"server_node_id"`
+	DeployMode      string     `gorm:"size:20;not null;default:'local'" json:"deploy_mode"`
+	TimeoutSec      int        `gorm:"default:600" json:"timeout_sec"`
+	ScriptFilename  string     `gorm:"size:255;default:'deploy.sh'" json:"script_filename"`
+	ContainerConfig string     `gorm:"type:text;default:''" json:"container_config"`
+	LocalConfig     string     `gorm:"type:text;default:''" json:"local_config"`
+	EnvFormat       string     `gorm:"size:20;default:'dotenv'" json:"env_format"`
+	EnvContent      string     `gorm:"type:text;default:''" json:"env_content"`
+	EnvEncrypted    bool       `gorm:"default:false" json:"env_encrypted"`
+	CodeDir         string     `gorm:"size:4096;default:''" json:"code_dir"`
+	DeployDir       string     `gorm:"size:4096;default:''" json:"deploy_dir"`
+	DefaultBranch   string     `gorm:"size:255;default:'main'" json:"default_branch"`
+	Description     string     `gorm:"size:500;default:''" json:"description"`
+	CreatedAt       time.Time  `json:"created_at"`
+	UpdatedAt       time.Time  `json:"updated_at"`
+
+	Project    Project      `gorm:"foreignKey:ProjectID" json:"project,omitempty"`
+	ServerNode *ServerNode  `gorm:"foreignKey:ServerNodeID" json:"server_node,omitempty"`
+	Tasks      []DeployTask `gorm:"foreignKey:DeploymentID" json:"-"`
+}
+
 // DeployTask 部署任务
 type DeployTask struct {
-	ID        uint       `gorm:"primaryKey" json:"id"`
-	ProjectID uint       `gorm:"not null;index" json:"project_id"`
-	Branch    string     `gorm:"size:255;not null" json:"branch"`
-	CommitSHA string     `gorm:"size:40;default:''" json:"commit_sha"`
-	Status    string     `gorm:"size:20;not null;default:'pending'" json:"status"`
-	StartedAt *time.Time `json:"started_at"`
-	EndedAt   *time.Time `json:"ended_at"`
-	LogPath   string     `gorm:"size:4096;not null" json:"log_path"`
-	TriggeredBy string  `gorm:"size:100;default:'root'" json:"triggered_by"`
-	ErrorMsg  string     `gorm:"type:text;default:''" json:"error_msg"`
-	CreatedAt time.Time  `json:"created_at"`
+	ID           uint       `gorm:"primaryKey" json:"id"`
+	ProjectID    uint       `gorm:"not null;index" json:"project_id"`
+	DeploymentID *uint      `json:"deployment_id"` // 新增：关联部署配置
+	Branch       string     `gorm:"size:255;not null" json:"branch"`
+	CommitSHA    string     `gorm:"size:40;default:''" json:"commit_sha"`
+	Status       string     `gorm:"size:20;not null;default:'pending'" json:"status"`
+	StartedAt    *time.Time `json:"started_at"`
+	EndedAt      *time.Time `json:"ended_at"`
+	LogPath      string     `gorm:"size:4096;not null" json:"log_path"`
+	TriggeredBy  string     `gorm:"size:100;default:'root'" json:"triggered_by"`
+	ErrorMsg     string     `gorm:"type:text;default:''" json:"error_msg"`
+	CreatedAt    time.Time  `json:"created_at"`
 
-	Project Project `gorm:"foreignKey:ProjectID" json:"-"`
+	Project    Project     `gorm:"foreignKey:ProjectID" json:"-"`
+	Deployment *Deployment `gorm:"foreignKey:DeploymentID" json:"deployment,omitempty"` // 新增
 }
 
 // ProjectHistory 项目部署历史快照

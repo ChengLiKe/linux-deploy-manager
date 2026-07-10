@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react'
 import { Plus, Trash2, TestTube, RefreshCw, HelpCircle, ChevronDown, ChevronUp, Copy, Check, Upload } from 'lucide-react'
 import { keyApi } from '../utils/api'
 import type { SSHKey } from '../types'
+import Select from '../components/Select'
 
 export default function KeyList() {
   const [keys, setKeys] = useState<SSHKey[]>([])
@@ -103,7 +104,7 @@ export default function KeyList() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold text-slate-800">SSH 密钥</h2>
+        <h2 className="text-lg font-bold text-slate-800">SSH 密钥</h2>
         <div className="flex gap-3">
           <button
             onClick={fetchKeys}
@@ -260,34 +261,28 @@ export default function KeyList() {
             </div>
 
             {createMode === 'generate' && (
-              <div>
-                <label className="block text-sm font-medium text-slate-700 mb-1">算法</label>
-                <select
-                  value={algorithm}
-                  onChange={(e) => setAlgorithm(e.target.value)}
-                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
-                >
-                  <option value="ed25519">Ed25519（推荐）</option>
-                  <option value="rsa">RSA 4096</option>
-                </select>
-              </div>
+              <Select
+                label="算法"
+                value={algorithm}
+                onChange={(val) => setAlgorithm(val)}
+              >
+                <option value="ed25519">Ed25519（推荐）</option>
+                <option value="rsa">RSA 4096</option>
+              </Select>
             )}
 
             {createMode === 'import' && (
               <>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-1">算法（选填）</label>
-                  <select
-                    value={algorithm}
-                    onChange={(e) => setAlgorithm(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
-                  >
-                    <option value="ed25519">Ed25519</option>
-                    <option value="rsa">RSA</option>
-                    <option value="ecdsa">ECDSA</option>
-                    <option value="dsa">DSA</option>
-                  </select>
-                </div>
+                <Select
+                  label="算法（选填）"
+                  value={algorithm}
+                  onChange={(val) => setAlgorithm(val)}
+                >
+                  <option value="ed25519">Ed25519</option>
+                  <option value="rsa">RSA</option>
+                  <option value="ecdsa">ECDSA</option>
+                  <option value="dsa">DSA</option>
+                </Select>
                 <div>
                   <div className="flex items-center justify-between mb-1">
                     <label className="block text-sm font-medium text-slate-700">私钥文件（PEM）</label>
@@ -319,17 +314,14 @@ export default function KeyList() {
               </>
             )}
 
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">密钥用途</label>
-              <select
-                value={keyType}
-                onChange={(e) => setKeyType(e.target.value as 'git' | 'server')}
-                className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500"
-              >
-                <option value="git">Git 拉取代码</option>
-                <option value="server">连接服务器</option>
-              </select>
-            </div>
+            <Select
+              label="密钥用途"
+              value={keyType}
+              onChange={(val) => setKeyType(val as 'git' | 'server')}
+            >
+              <option value="git">Git 拉取代码</option>
+              <option value="server">连接服务器</option>
+            </Select>
 
             <div className="flex gap-3">
               {createMode === 'generate' ? (

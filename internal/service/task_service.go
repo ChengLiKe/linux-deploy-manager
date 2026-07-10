@@ -21,6 +21,7 @@ type TaskService struct {
 	repo           repository.TaskRepository
 	serverNodeRepo repository.ServerNodeRepository
 	keyRepo        repository.KeyRepository
+	projectRepo    repository.ProjectRepository
 	sshPool        *sshclient.Pool
 	deployer       *deployer.Deployer
 	logDir         string
@@ -28,8 +29,8 @@ type TaskService struct {
 }
 
 // NewTaskService 创建任务服务
-func NewTaskService(repo repository.TaskRepository, serverNodeRepo repository.ServerNodeRepository, keyRepo repository.KeyRepository, sshPool *sshclient.Pool, deployer *deployer.Deployer, logDir string, settingService *SettingService) *TaskService {
-	return &TaskService{repo: repo, serverNodeRepo: serverNodeRepo, keyRepo: keyRepo, sshPool: sshPool, deployer: deployer, logDir: logDir, settingService: settingService}
+func NewTaskService(repo repository.TaskRepository, serverNodeRepo repository.ServerNodeRepository, keyRepo repository.KeyRepository, projectRepo repository.ProjectRepository, sshPool *sshclient.Pool, deployer *deployer.Deployer, logDir string, settingService *SettingService) *TaskService {
+	return &TaskService{repo: repo, serverNodeRepo: serverNodeRepo, keyRepo: keyRepo, projectRepo: projectRepo, sshPool: sshPool, deployer: deployer, logDir: logDir, settingService: settingService}
 }
 
 // CreateTaskRequest 创建任务请求
@@ -129,6 +130,87 @@ func (s *TaskService) ExecuteDeploy(taskID uint, project *model.Project, key *mo
 	return s.deployer.Execute(ctx, fmt.Sprintf("%d", taskID), cfg, executor, gitService)
 }
 
+// ExecuteDeployFromDeployment 通过部署配置执行部署
+func (s *TaskService) ExecuteDeployFromDeployment(taskID uint, deployment *model.Deployment) error {
+	// 获取任务
+	task, err := s.repo.Get(taskID)
+	if err != nil {
+		return fmt.Errorf("get task: %w", err)
+	}
+
+	// 获取项目
+	project, err := s.projectRepo.Get(deployment.ProjectID)
+	if err != nil {
+		return fmt.Errorf("get project: %w", err)
+	}
+
+	// 获取 SSH 密钥
+	key, err := s.keyRepo.Get(project.SSHKeyID)
+	if err != nil {
+		return fmt.Errorf("get ssh key: %w", err)
+	}
+
+	// 创建 Executor（使用部署配置的 ServerNodeID 和 TimeoutSec）
+	executor, err := s.createDeploymentExecutor(deployment)
+	if err != nil {
+		return fmt.Errorf("create executor: %w", err)
+	}
+
+	// 创建 Git 服务
+	var gitService git.Service
+	targetNodeID := deployment.ServerNodeID
+	if targetNodeID == nil || *targetNodeID == 0 {
+		targetNodeID = project.ServerNodeID
+	}
+	if targetNodeID != nil && *targetNodeID > 0 {
+		gitService = remote.NewGitService(executor)
+	} else {
+		gitService = git.NewService()
+	}
+
+	// 解析环境变量
+	envVars := make(map[string]string)
+	// TODO: 解析 project.EnvContent 根据 project.EnvFormat
+
+	// 使用分支：优先使用任务分支，再使用部署配置的默认分支
+	branch := task.Branch
+	if branch == "" {
+		branch = deployment.DefaultBranch
+		if branch == "" {
+			branch = "main"
+		}
+	}
+
+	// 代码部署目录：优先使用部署配置的值，再回退到项目配置
+	codeDir := deployment.CodeDir
+	if codeDir == "" {
+		codeDir = project.CodeDir
+	}
+	deployDir := deployment.DeployDir
+	if deployDir == "" {
+		deployDir = project.DeployDir
+	}
+
+	cfg := &deployer.Config{
+		Name:            project.Name,
+		GitURL:          project.GitURL,
+		SSHKeyPath:      key.PrivatePath,
+		CodeDir:         codeDir,
+		DeployDir:       deployDir,
+		Branch:          branch,
+		EnvVars:         envVars,
+		DeployCmd:       "bash " + deployment.ScriptFilename,
+		DeployMode:      deployment.DeployMode,
+		ContainerConfig: deployment.ContainerConfig,
+		LocalConfig:     deployment.LocalConfig,
+		TimeoutSec:      deployment.TimeoutSec,
+		LogDir:          s.logDir,
+	}
+
+	ctx := context.Background()
+	return s.deployer.Execute(ctx, fmt.Sprintf("%d", taskID), cfg, executor, gitService)
+}
+
 // createExecutor 根据项目配置创建对应的执行器（本地或远程）
 func (s *TaskService) createExecutor(project *model.Project) (deployer.Executor, error) {
 	if project.ServerNodeID == nil || *project.ServerNodeID == 0 {
@@ -153,6 +235,31 @@ func (s *TaskService) createExecutor(project *model.Project) (deployer.Executor,
 	}
 
 	return deployer.NewRemoteExecutor(client, project.TimeoutSec), nil
+}
+
+// createDeploymentExecutor 根据部署配置创建对应的执行器（本地或远程）
+func (s *TaskService) createDeploymentExecutor(deployment *model.Deployment) (deployer.Executor, error) {
+	targetNodeID := deployment.ServerNodeID
+	if targetNodeID == nil || *targetNodeID == 0 {
+		return deployer.NewLocalExecutor(deployment.TimeoutSec), nil
+	}
+
+	node, err := s.serverNodeRepo.Get(*targetNodeID)
+	if err != nil {
+		return nil, fmt.Errorf("get server node %d: %w", *targetNodeID, err)
+	}
+	if node.Status != "online" && node.Status != "unknown" {
+		return nil, fmt.Errorf("目标服务器 %s 状态异常（%s），无法部署", node.Name, node.Status)
+	}
+
+	client, err := s.sshPool.GetOrCreate(node.ID, func() (*sshclient.Client, error) {
+		return s.createSSHClient(node)
+	})
+	if err != nil {
+		return nil, fmt.Errorf("connect to server %s: %w", node.Host, err)
+	}
+
+	return deployer.NewRemoteExecutor(client, deployment.TimeoutSec), nil
 }
 
 // createSSHClient 根据服务器节点配置创建 SSH 客户端

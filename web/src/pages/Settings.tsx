@@ -97,21 +97,23 @@ export default function Settings() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h2 className="text-2xl font-bold text-slate-800">系统设置</h2>
+      <div>
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-bold text-slate-800">系统设置</h2>
+        </div>
       </div>
+
+      {message && (
+        <div className="p-3 bg-green-50 text-green-600 rounded-lg text-sm border border-green-200">{message}</div>
+      )}
+      {error && (
+        <div className="p-3 bg-red-50 text-red-600 rounded-lg text-sm border border-red-200">{error}</div>
+      )}
 
       <div className="bg-white rounded-xl border border-slate-200 p-6">
         <h3 className="text-lg font-semibold text-slate-800 mb-4">修改密码</h3>
 
-        {message && (
-          <div className="mb-4 p-3 bg-green-50 text-green-600 rounded-lg text-sm">{message}</div>
-        )}
-        {error && (
-          <div className="mb-4 p-3 bg-red-50 text-red-600 rounded-lg text-sm">{error}</div>
-        )}
-
-        <form onSubmit={handleChangePassword} className="space-y-4 max-w-md">
+        <form onSubmit={handleChangePassword} className="space-y-4 max-w-lg">
           <div>
             <label className="block text-sm font-medium text-slate-700 mb-1">旧密码</label>
             <input
@@ -150,7 +152,7 @@ export default function Settings() {
 
       <div className="bg-white rounded-xl border border-slate-200 p-6">
         <h3 className="text-lg font-semibold text-slate-800 mb-4">容器部署设置</h3>
-        <div className="space-y-4 max-w-md">
+        <div className="space-y-4 max-w-lg">
           <div className="flex items-start gap-3 pt-1">
             <input
               id="sudo-enabled"
@@ -192,7 +194,7 @@ export default function Settings() {
         <div className="bg-white rounded-xl border border-slate-200 p-6">
           <h3 className="text-lg font-semibold text-slate-800 mb-4">关闭行为</h3>
           <p className="text-sm text-slate-500 mb-4">设置点击关闭按钮时的行为</p>
-          <div className="flex gap-3 max-w-md">
+          <div className="flex gap-3 max-w-lg">
             <button
               onClick={() => handleCloseBehaviorChange('quit')}
               className={`flex-1 p-4 text-sm border-2 rounded-xl text-left transition-all ${

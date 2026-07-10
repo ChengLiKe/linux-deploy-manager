@@ -3,6 +3,7 @@ import { useParams } from 'react-router-dom'
 import { Play, Download, RotateCcw, ChevronDown, ChevronUp } from 'lucide-react'
 import { projectApi, taskApi } from '../utils/api'
 import { useWebSocket } from '../hooks/useWebSocket'
+import Select from '../components/Select'
 
 export default function DeployPage() {
   const { id } = useParams<{ id: string }>()
@@ -177,20 +178,20 @@ export default function DeployPage() {
       </div>
 
       <div className="bg-white rounded-xl border border-slate-200 p-6 space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-slate-700 mb-1">选择分支</label>
-          <div className="flex gap-3">
-            <select
+        <div className="flex gap-3">
+          <div className="flex-1">
+            <Select
+              label="选择分支"
               value={branch}
-              onChange={(e) => setBranch(e.target.value)}
+              onChange={(val) => setBranch(val)}
               disabled={deploying}
-              className="flex-1 px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-amber-500 disabled:opacity-50"
             >
               <option value="">请选择分支</option>
               {branches.map((b) => (
                 <option key={b} value={b}>{b}</option>
               ))}
-            </select>
+            </Select>
+          </div>
             <button
               onClick={loadBranches}
               disabled={branchesLoading}
@@ -199,7 +200,6 @@ export default function DeployPage() {
               {branchesLoading ? '刷新中...' : '刷新'}
             </button>
           </div>
-        </div>
 
         <div className="flex gap-3">
           <button

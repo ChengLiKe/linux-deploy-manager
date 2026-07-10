@@ -1,7 +1,8 @@
 # 构建产物
 bin/
-/server
 cmd/server/web/dist/
+/server
+/server.exe
 web/dist/
 dist-electron/
 web/node_modules/

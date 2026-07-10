@@ -1,5 +1,31 @@
 # 版本记录
 
+## [v1.2.0] - 2026-07-10
+
+### 新增
+- 部署配置独立管理（`/api/deployments/*` CRUD + 触发部署），支持一个项目多环境
+- `Deployment` 数据模型，解耦项目与部署配置
+- 前端部署管理页面：`DeploymentList`、`DeploymentForm`、`DeploymentDetail`
+- 侧边导航新增"部署"入口
+- `sysutil.ProcAttr()` 进程组管理函数，支持 Unix 进程组终止
+- `sysutil.TerminateProcess()` 跨平台进程终止函数
+
+### 变更
+- **Project-部署解耦**：部署配置从 `Project` 剥离至 `Deployment` 实体（旧字段保留向后兼容）
+- `ProjectForm` 简化：移除部署配置字段（deploy_mode/命令编辑/超时等）
+- `ProjectList` 简化：移除 deploy_mode 标签，部署按钮跳转到项目部署列表
+- 导航栏新增"部署"项（Rocket 图标）
+- `POST /projects/:id/deploy` 保持向后兼容——自动查找/创建默认 Deployment 并转发
+
+### 修复
+- **安全修复**：`ListRemoteDir` 命令注入漏洞——路径改用 shell 安全转义
+- **逻辑修复**：`PATCH /projects/:id` 改用独立 `PatchProjectRequest`（全字段指针），避免 `binding:"required"` 导致部分更新失败
+- **资源泄漏修复**：`ConnectivityDiagnoser` SSH 连接释放条件放宽——只要 client 已创建即关闭
+- **goroutine 泄漏修复**：`TerminalHandler` stderr 转发协程写入 WebSocket 失败时通知 `errChan` 而非静默退出
+- **接口一致性**：`ServerURL Create` 的 `SortOrder` 改为 `*int`，与 Update 一致
+- **进程管理**：`localshell` 新建进程时设置进程组（Unix），`Close()` 时连带终止子进程避免僵尸进程
+- **文档**：`WipeKey()` 函数注释明确标注调用限制——仅应在进程退出前调用
+
 ## [v1.1.0] - 2026-07-08
 
 ### 新增

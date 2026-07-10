@@ -450,6 +450,18 @@ app.on('activate', () => {
 // ── IPC 处理 ────────────────────────────────────────
 ipcMain.handle('get-backend-port', () => backendPort);
 
+// 打开文件夹选择器
+ipcMain.handle('select-directory', async () => {
+  const result = await dialog.showOpenDialog({
+    properties: ['openDirectory'],
+    title: '选择项目文件夹',
+  });
+  if (result.canceled || result.filePaths.length === 0) {
+    return null;
+  }
+  return result.filePaths[0];
+});
+
 // 手动检查更新
 ipcMain.handle('check-for-update', async () => {
   if (!app.isPackaged) return { error: '开发模式不支持自动更新' };

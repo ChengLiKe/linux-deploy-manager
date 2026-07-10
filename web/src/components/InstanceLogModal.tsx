@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef, useMemo, useCallback } from 'react'
 import { X, Download, Wifi, WifiOff, Search, Pause, Play, RotateCw } from 'lucide-react'
 import { useInstanceLogSocket, type LogLine, type ServiceMeta } from '../hooks/useInstanceLogSocket'
+import Select from '../components/Select'
 
 interface InstanceLogModalProps {
   projectId: number
@@ -196,42 +197,42 @@ export default function InstanceLogModal({ projectId, projectName, onClose }: In
           {services.length > 0 && (
             <>
               <span className="text-xs text-slate-500 shrink-0">服务</span>
-              <select
+              <Select
                 value={selectedService}
-                onChange={(e) => handleServiceChange(e.target.value)}
-                className="text-xs border border-slate-300 rounded px-2 py-1 bg-white text-slate-700"
+                onChange={(val) => handleServiceChange(val)}
+                compact
               >
                 <option value="">全部</option>
                 {services.map((s) => (
                   <option key={s} value={s}>{s}</option>
                 ))}
-              </select>
+              </Select>
             </>
           )}
           <span className="text-xs text-slate-500 shrink-0">级别</span>
-          <select
+          <Select
             value={selectedLevel}
-            onChange={(e) => setSelectedLevel(e.target.value)}
-            className="text-xs border border-slate-300 rounded px-2 py-1 bg-white text-slate-700"
+            onChange={(val) => setSelectedLevel(val)}
+            compact
           >
             <option value="">全部</option>
             <option value="error">ERROR</option>
             <option value="warn">WARN</option>
             <option value="info">INFO</option>
             <option value="debug">DEBUG</option>
-          </select>
+          </Select>
           <div className="w-px h-4 bg-slate-300 mx-1" />
           <span className="text-xs text-slate-500 shrink-0">显示</span>
-          <select
+          <Select
             value={tailCount}
-            onChange={(e) => handleTailChange(Number(e.target.value))}
-            className="text-xs border border-slate-300 rounded px-2 py-1 bg-white text-slate-700"
+            onChange={(val) => handleTailChange(Number(val))}
+            compact
           >
             <option value="100">100行</option>
             <option value="200">200行</option>
             <option value="500">500行</option>
             <option value="1000">1000行</option>
-          </select>
+          </Select>
           <div className="w-px h-4 bg-slate-300 mx-1" />
           <div className="flex items-center gap-1 flex-1 min-w-0">
             <Search size={12} className="text-slate-400 shrink-0" />

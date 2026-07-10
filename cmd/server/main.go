@@ -189,6 +189,17 @@ func main() {
 			authorized.POST("/projects/:id/clone", projectHandler.Clone)
 			authorized.GET("/projects/:id/branches", projectHandler.Branches)
 			authorized.POST("/projects/:id/deploy", projectHandler.Deploy)
+			authorized.POST("/projects/import-folder", projectHandler.ImportFolder)
+			authorized.POST("/projects/import-git", projectHandler.ImportGit)
+
+			deploymentHandler := handler.NewDeploymentHandler(svc)
+			authorized.GET("/deployments", deploymentHandler.List)
+			authorized.POST("/deployments", deploymentHandler.Create)
+			authorized.GET("/deployments/:id", deploymentHandler.Get)
+			authorized.PUT("/deployments/:id", deploymentHandler.Update)
+			authorized.DELETE("/deployments/:id", deploymentHandler.Delete)
+			authorized.POST("/deployments/:id/deploy", deploymentHandler.Deploy)
+			authorized.GET("/deployments/:id/branches", deploymentHandler.Branches)
 
 			fsHandler := handler.NewFSHandler()
 			authorized.GET("/fs/list", fsHandler.ListDir)

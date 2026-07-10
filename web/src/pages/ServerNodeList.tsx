@@ -5,6 +5,7 @@ import type { ServerNode } from '@/types'
 import { Plus, Server, Trash2, RefreshCw, Edit3, Key, X, Activity, Terminal } from 'lucide-react'
 import DiagnoseModal from '@/components/DiagnoseModal'
 import ServerURLs from '@/components/ServerURLs'
+import Select from '@/components/Select'
 
 interface ServerKey {
   id: number
@@ -282,16 +283,17 @@ export default function ServerNodeList() {
               {showDistribute === node.id && (
                 <div className="mt-3 p-3 bg-slate-50 rounded-lg border border-slate-200">
                   <div className="flex items-center gap-3">
-                    <select
-                      value={distributeKeyId}
-                      onChange={(e) => setDistributeKeyId(Number(e.target.value))}
-                      className={`${inputCls} flex-1`}
-                    >
-                      <option value={0}>选择要下发的 Git 密钥</option>
-                      {gitKeys.map((k) => (
-                        <option key={k.id} value={k.id}>{k.name}</option>
-                      ))}
-                    </select>
+                    <div className="flex-1">
+                      <Select
+                        value={distributeKeyId}
+                        onChange={(val) => setDistributeKeyId(Number(val))}
+                      >
+                        <option value={0}>选择要下发的 Git 密钥</option>
+                        {gitKeys.map((k) => (
+                          <option key={k.id} value={k.id}>{k.name}</option>
+                        ))}
+                      </Select>
+                    </div>
                     <button
                       onClick={() => handleDistribute(node.id)}
                       disabled={distributingId === node.id}
@@ -395,17 +397,16 @@ export default function ServerNodeList() {
               </div>
               {form.auth_type === 'key' ? (
                 <div>
-                  <label className={labelCls}>服务器密钥</label>
-                  <select
+                  <Select
+                    label="服务器密钥"
                     value={form.server_key_id}
-                    onChange={(e) => setForm({ ...form, server_key_id: Number(e.target.value) })}
-                    className={inputCls}
+                    onChange={(val) => setForm({ ...form, server_key_id: Number(val) })}
                   >
                     <option value={0}>请选择密钥</option>
                     {serverKeys.map((k) => (
                       <option key={k.id} value={k.id}>{k.name}</option>
                     ))}
-                  </select>
+                  </Select>
                   {serverKeys.length === 0 && (
                     <div className="text-xs text-amber-600 mt-1">
                       暂无服务器密钥，请先到

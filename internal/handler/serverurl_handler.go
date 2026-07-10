@@ -26,7 +26,7 @@ type CreateServerURLRequest struct {
 	URL         string `json:"url" binding:"required,max=2048"`
 	Group       string `json:"group" binding:"omitempty,max=50"`
 	Description string `json:"description" binding:"omitempty,max=500"`
-	SortOrder   int    `json:"sort_order"`
+	SortOrder   *int   `json:"sort_order"`
 }
 
 // UpdateServerURLRequest 更新请求
@@ -72,13 +72,18 @@ func (h *ServerURLHandler) Create(c *gin.Context) {
 		req.Group = "default"
 	}
 
+	sortOrder := 0
+	if req.SortOrder != nil {
+		sortOrder = *req.SortOrder
+	}
+
 	u := &model.ServerURL{
 		NodeID:      req.NodeID,
 		Name:        req.Name,
 		URL:         req.URL,
 		Group:       req.Group,
 		Description: req.Description,
-		SortOrder:   req.SortOrder,
+		SortOrder:   sortOrder,
 	}
 
 	if err := h.repo.Create(u); err != nil {

@@ -14,6 +14,7 @@ type Repositories struct {
 	Task       TaskRepository
 	Setting    SettingRepository
 	ServerURL  ServerURLRepository
+	Deployment DeploymentRepository
 }
 
 // New 创建所有仓库实例
@@ -25,6 +26,7 @@ func New(db *gorm.DB) *Repositories {
 		Task:       &taskRepo{db: db},
 		Setting:    &settingRepo{db: db},
 		ServerURL:  &serverURLRepo{db: db},
+		Deployment: &deploymentRepo{db: db},
 	}
 }
 
@@ -259,7 +261,66 @@ func (r *settingRepo) Set(key, value string) error {
 	return r.db.Save(&s).Error
 }
 
-// ── ServerURL ─────────────────────────────────────
+// ── Deployment ──────────────────────────────────
+
+// DeploymentRepository 部署配置仓库接口
+type DeploymentRepository interface {
+	Create(d *model.Deployment) error
+	Get(id uint) (*model.Deployment, error)
+	List(projectID uint, page, pageSize int) ([]model.Deployment, int64, error)
+	Update(d *model.Deployment) error
+	Delete(id uint) error
+	CountByProject(projectID uint) (int64, error)
+}
+
+type deploymentRepo struct {
+	db *gorm.DB
+}
+
+func (r *deploymentRepo) Create(d *model.Deployment) error {
+	return r.db.Create(d).Error
+}
+
+func (r *deploymentRepo) Get(id uint) (*model.Deployment, error) {
+	var d model.Deployment
+	if err := r.db.Preload("Project").Preload("ServerNode").First(&d, id).Error; err != nil {
+		return nil, err
+	}
+	return &d, nil
+}
+
+func (r *deploymentRepo) List(projectID uint, page, pageSize int) ([]model.Deployment, int64, error) {
+	var deployments []model.Deployment
+	var total int64
+
+	query := r.db.Model(&model.Deployment{})
+	if projectID > 0 {
+		query = query.Where("project_id = ?", projectID)
+	}
+
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	if err := query.Preload("Project").Preload("ServerNode").Order("created_at DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&deployments).Error; err != nil {
+		return nil, 0, err
+	}
+	return deployments, total, nil
+}
+
+func (r *deploymentRepo) Update(d *model.Deployment) error {
+	return r.db.Save(d).Error
+}
+
+func (r *deploymentRepo) Delete(id uint) error {
+	return r.db.Delete(&model.Deployment{}, id).Error
+}
+
+func (r *deploymentRepo) CountByProject(projectID uint) (int64, error) {
+	var count int64
+	err := r.db.Model(&model.Deployment{}).Where("project_id = ?", projectID).Count(&count).Error
+	return count, err
+}
 
 // ServerURLRepository 服务器网址仓库接口
 type ServerURLRepository interface {

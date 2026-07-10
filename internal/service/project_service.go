@@ -34,7 +34,7 @@ type CreateProjectRequest struct {
 	Name            string `json:"name" binding:"required,min=2,max=50"`
 	Description     string `json:"description" binding:"max=500"`
 	GitURL          string `json:"git_url" binding:"required"`
-	SSHKeyID        uint   `json:"ssh_key_id" binding:"required"`
+	SSHKeyID        uint   `json:"ssh_key_id"`
 	ServerNodeID    *uint  `json:"server_node_id"`
 	CodeDir         string `json:"code_dir" binding:"required"`
 	DeployDir       string `json:"deploy_dir"`
@@ -58,9 +58,11 @@ func (s *ProjectService) Create(req *CreateProjectRequest) (*model.Project, erro
 		req.TimeoutSec = 600
 	}
 
-	// 验证密钥存在
-	if _, err := s.keyRepo.Get(req.SSHKeyID); err != nil {
-		return nil, fmt.Errorf("ssh key not found: %w", err)
+	// 验证密钥存在（仅当指定了密钥时）
+	if req.SSHKeyID > 0 {
+		if _, err := s.keyRepo.Get(req.SSHKeyID); err != nil {
+			return nil, fmt.Errorf("ssh key not found: %w", err)
+		}
 	}
 
 	// 规范化 server_node_id: 0 视为 nil（本地部署）
@@ -271,8 +273,8 @@ func (s *ProjectService) Branches(id uint) ([]string, error) {
 		if err != nil {
 			return nil, fmt.Errorf("get server node: %w", err)
 		}
-		if node.Status != "online" {
-			return nil, fmt.Errorf("目标服务器 %s 离线，无法获取分支", node.Name)
+		if node.Status != "online" && node.Status != "unknown" {
+			return nil, fmt.Errorf("目标服务器 %s 状态异常（%s），无法获取分支", node.Name, node.Status)
 		}
 
 		client, err := s.sshPool.GetOrCreate(node.ID, func() (*sshclient.Client, error) {

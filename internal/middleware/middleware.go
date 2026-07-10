@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/linux-deploy-manager/internal/auth"
@@ -76,6 +77,12 @@ func ServeEmbed(fs http.FileSystem) gin.HandlerFunc {
 	fileServer := http.FileServer(fs)
 	return func(c *gin.Context) {
 		path := c.Request.URL.Path
+
+		// API 路径不应用 SPA 回退：避免 API 请求 → 返回 index.html → 页面重载 → 循环
+		if strings.HasPrefix(path, "/api/") {
+			c.JSON(http.StatusNotFound, gin.H{"code": 404099, "message": "API endpoint not found"})
+			return
+		}
 
 		// 尝试打开文件
 		f, err := fs.Open(path)

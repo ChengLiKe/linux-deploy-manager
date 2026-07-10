@@ -1,6 +1,6 @@
 import axios from 'axios'
 import { getBackendPort, isElectron, navigateToLogin } from './electron'
-import type { CreateProjectRequest, UpdateProjectRequest, Project, CreateServerNodeRequest, UpdateServerNodeRequest } from '@/types'
+import type { CreateProjectRequest, UpdateProjectRequest, Project, CreateServerNodeRequest, UpdateServerNodeRequest, CreateDeploymentRequest, UpdateDeploymentRequest } from '@/types'
 
 const api = axios.create({
   baseURL: '/api/v1',
@@ -83,6 +83,8 @@ export const projectApi = {
   clone: (id: number, data?: { name?: string }) => api.post(`/projects/${id}/clone`, data),
   branches: (id: number) => api.get(`/projects/${id}/branches`),
   deploy: (id: number, branch: string) => api.post(`/projects/${id}/deploy`, { branch }),
+  importFolder: (folderPath: string) => api.post('/projects/import-folder', { folder_path: folderPath }),
+  importGit: (gitUrl: string) => api.post('/projects/import-git', { git_url: gitUrl }),
 }
 
 export const fsApi = {
@@ -146,4 +148,15 @@ export const urlApi = {
   create: (data: Record<string, unknown>) => api.post('/server-urls', data),
   update: (id: number, data: Record<string, unknown>) => api.put(`/server-urls/${id}`, data),
   delete: (id: number) => api.delete(`/server-urls/${id}`),
+}
+
+export const deploymentApi = {
+  list: (params?: { project_id?: number; page?: number; page_size?: number }) =>
+    api.get('/deployments', { params }),
+  create: (data: CreateDeploymentRequest) => api.post('/deployments', data),
+  get: (id: number) => api.get(`/deployments/${id}`),
+  update: (id: number, data: UpdateDeploymentRequest) => api.put(`/deployments/${id}`, data),
+  delete: (id: number) => api.delete(`/deployments/${id}`),
+  deploy: (id: number, branch: string) => api.post(`/deployments/${id}/deploy`, { branch }),
+  branches: (id: number) => api.get(`/deployments/${id}/branches`),
 }

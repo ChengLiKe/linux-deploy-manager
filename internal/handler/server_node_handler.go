@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"path"
 	"strconv"
 	"strings"
 
@@ -185,8 +186,15 @@ func (h *ServerNodeHandler) ListRemoteDir(c *gin.Context) {
 	}
 	defer client.Close()
 
-	// 执行 ls -d 列出目录
-	cmd := fmt.Sprintf("ls -d %s/*/ 2>/dev/null || echo '__NO_DIRS__'", strings.TrimRight(req.Path, "/"))
+	// 安全地列出目录：清理路径 + shell 转义 + 禁止元字符
+	safePath := path.Clean(req.Path)
+	if strings.ContainsAny(safePath, "`$;|&(){}[]<>!#~") {
+		c.JSON(http.StatusBadRequest, gin.H{"code": 400056, "message": "路径包含非法字符"})
+		return
+	}
+	// 使用单引号包裹路径以防止 shell 注入
+	quotedPath := "'" + strings.ReplaceAll(safePath, "'", "'\\''") + "'"
+	cmd := fmt.Sprintf("ls -d %s/*/ 2>/dev/null || echo '__NO_DIRS__'", quotedPath)
 	stdout, _, done, err := client.Execute(context.Background(), cmd)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"code": 400055, "message": "命令执行失败：" + err.Error()})

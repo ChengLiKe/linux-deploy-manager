@@ -66,7 +66,6 @@ func (d *ConnectivityDiagnoser) Diagnose(nodeID uint, opts *DiagnoseOptions) (*C
 
 	// 只有认证通过后才创建 SSH 客户端（给后续诊断项复用）
 	var sshClient *sshclient.Client
-	var authErr error
 
 	steps := []DiagnosticStep{
 		{
@@ -104,7 +103,6 @@ func (d *ConnectivityDiagnoser) Diagnose(nodeID uint, opts *DiagnoseOptions) (*C
 			Run: func(r *ConnectivityReport) DiagnosticItem {
 				client, err := d.createSSHClient(node)
 				sshClient = client
-				authErr = err
 				return d.diagnoseAuth(node, client, err)
 			},
 		},
@@ -179,8 +177,8 @@ func (d *ConnectivityDiagnoser) Diagnose(nodeID uint, opts *DiagnoseOptions) (*C
 		report.Items = append(report.Items, item)
 	}
 
-	// 关闭 SSH 连接
-	if sshClient != nil && authErr == nil {
+	// 关闭 SSH 连接（只要 client 已创建就关闭，不论认证是否成功）
+	if sshClient != nil {
 		sshClient.Close()
 	}
 
